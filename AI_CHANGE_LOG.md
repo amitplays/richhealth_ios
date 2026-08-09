@@ -5,7 +5,7 @@
 ## [2026-08-09] Services cards — follow-up polish (owner review of the rendered build)
 
 - **Removed the meta Divider** from `StandardCard` (Android has none) — cards are cleaner.
-- **Date is now a bare "X ago", left-aligned under the content** (was bottom-right, after a divider) — matches Android position; no label prefix.
+- **Date is a bare "X ago", kept bottom-right** (owner: it was the label that was inconsistent, not the position). Dropped the descriptive prefix; Android's "Last insight/Updated/Checked/Last check-in" prefixes were stripped to match.
 - **Removed the "New data — tap to refresh insights" warning** from the Health Analysis card — the yellow attention chevron already conveys "out of date", so the banner was redundant.
 - In-sheet cards that still use a CTA/footer keep CTA-left + date-right on one line. §27 updated.
 Files: `DesignSystem/Components/StandardCard.swift`, `Features/Services/ServicesHomeView.swift`, `CLAUDE.md`.

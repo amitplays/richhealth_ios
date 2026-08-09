@@ -157,25 +157,21 @@ struct StandardCard: View {
         }
     }
 
-    // Meta row. No divider (matches Android). Dashboard cards show a bare, left-aligned date under
-    // the content; in-sheet cards with a CTA/footer keep CTA left + date right on the same line.
+    // Meta row: NO divider (matches Android). Date is a bare "X ago" bottom-right; in-sheet cards
+    // with a CTA/footer keep CTA left + date right on the same line.
     @ViewBuilder private var metaRow: some View {
         if hasMeta {
-            if (ctaTitle?.isEmpty == false) || footerView != nil {
-                HStack {
-                    if let ctaTitle, !ctaTitle.isEmpty {
-                        Button(ctaTitle) { ctaAction?() }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.brandTeal)
-                            .buttonStyle(.plain)
-                    } else if let footerView {
-                        footerView
-                    }
-                    Spacer(minLength: Theme.Spacing.s)
-                    dateLabel
+            HStack {
+                if let ctaTitle, !ctaTitle.isEmpty {
+                    Button(ctaTitle) { ctaAction?() }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.brandTeal)
+                        .buttonStyle(.plain)
+                } else if let footerView {
+                    footerView
                 }
-            } else {
-                dateLabel.frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: Theme.Spacing.s)
+                dateLabel
             }
         }
     }
