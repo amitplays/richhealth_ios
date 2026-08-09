@@ -238,6 +238,19 @@ final class ServicesHomeViewModel {
         } catch {}
     }
 
+    /// Force a fresh dietary fetch (tapping the Dietary card, e.g. to clear a stale state).
+    func refreshDietary() async {
+        isLoadingDietary = true
+        defer { isLoadingDietary = false }
+        do {
+            let fresh = try await insightsService.fetchDietaryInsights()
+            SessionCache.save(fresh, key: "dietary")
+            dietaryInsights = fresh
+        } catch let err as APIError {
+            if case .limitReached = err { showPaywall = true }
+        } catch {}
+    }
+
     private func loadFeed() async {
         defer { isLoadingFeed = false }
         guard let r = try? await feedService.fetchFeed(page: 1, limit: 20) else { return }

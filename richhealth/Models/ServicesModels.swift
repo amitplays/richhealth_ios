@@ -62,6 +62,8 @@ struct DailyDigestResponse: Codable {
     let aqiLabel: String?
     let aqiColor: String?
     let showAqi: Bool?
+    let generatedAt: String?   // when this advisory was generated → "Updated X ago" date
+    let stale: Bool?           // health data changed after it was generated → attention chevron
 }
 
 // MARK: - Dietary Insights  /api/insights/dietary-insights
@@ -70,6 +72,8 @@ struct DietaryInsightsResponse: Codable {
     let foodsToEat: [String]
     let foodsToAvoid: [String]
     let usageStatus: UsageStatus?
+    let lastUpdated: String?   // when these insights were generated → "Updated X ago" date
+    let stale: Bool?           // health data changed after they were generated → attention chevron
 
     // Lenient: the backend occasionally returns 200 without the arrays (AI warming up / degraded).
     // Decode defensively so the card falls back to its empty state instead of throwing a decode error.
@@ -78,6 +82,8 @@ struct DietaryInsightsResponse: Codable {
         foodsToEat   = (try? c.decode([String].self, forKey: .foodsToEat)) ?? []
         foodsToAvoid = (try? c.decode([String].self, forKey: .foodsToAvoid)) ?? []
         usageStatus  = try? c.decode(UsageStatus.self, forKey: .usageStatus)
+        lastUpdated  = try? c.decode(String.self, forKey: .lastUpdated)
+        stale        = try? c.decode(Bool.self,   forKey: .stale)
     }
 }
 
@@ -357,6 +363,10 @@ struct HealthAnalysis: Decodable {
     let healthAnalysisCache: HACache?
     let lastUpdated: String?
     let dataChangesSinceAnalysis: HADataChanges?
+    // Cross-feature staleness helpers (exposed by the analysis endpoint) used to drive the
+    // NutriCheck launcher card's "Last checked" date + attention chevron.
+    let lastNutriCheckAt: String?
+    let lastHealthDataChange: String?
 
     struct HAStatus: Decodable {
         let level: String?   // "excellent"|"stable"|"attention"|"critical"
