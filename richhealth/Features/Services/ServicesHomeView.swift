@@ -34,8 +34,6 @@ struct ServicesHomeView: View {
                     // 3 — Connect a device (Apple Health / Apple Watch) — native replacement
                     // for Android HomeFragment's Google Fit "Connect a Device" card.
                     DeviceSyncCardView(isConnected: health.isConnected,
-                                       heartRate: health.latestHeartRate,
-                                       heartRateAt: health.latestHeartRateAt,
                                        lastSyncTS: health.lastSyncTS) { showWatchSheet = true }
 
                     // 4 — Daily Check-In
@@ -55,11 +53,16 @@ struct ServicesHomeView: View {
                     // 6 — Dietary Insights
                     DietaryInsightsCardView(
                         insights: vm.dietaryInsights,
-                        isLoading: vm.isLoadingDietary
+                        isLoading: vm.isLoadingDietary,
+                        onRefresh: { Task { await vm.refreshDietary() } }
                     )
 
                     // 6b — NutriCheck — its own feature (Android parity), not part of Dietary Insights
-                    NutriCheckCardView(onTap: { vm.activeSheet = .nutriCheck })
+                    NutriCheckCardView(
+                        lastCheckedAt: vm.healthAnalysis?.lastNutriCheckAt,
+                        isStale: nutriCheckIsStale(vm.healthAnalysis),
+                        onTap: { vm.activeSheet = .nutriCheck }
+                    )
 
                     // 7 — Feed preview (first 3 items + See All)
                     FeedPreviewSectionView(
@@ -224,23 +227,29 @@ private struct HealthAnalysisCardView: View {
             bodyText: bodyLine,
             bodyLineLimit: 2,
             bodyView: bodyOverflow,
-            // Data-changed badge
+            // Data-changed badge — complements the attention chevron with a spelled-out reason.
             warning: (!isGenerating && analysis?.dataChangesSinceAnalysis?.hasChanges == true)
-                     ? "New data — refresh for updated insights" : nil,
-            ctaTitle: (analysis != nil && !isGenerating) ? "View Full Analysis" : nil,
-            ctaAction: onView,
-            footerView: footerOverflow,
-            date: (analysis != nil && !isGenerating) ? analysis.flatMap { relativeTime($0.lastUpdated) } : nil
+                     ? "New data — tap to refresh insights" : nil,
+            date: (analysis != nil && !isGenerating) ? analysis.flatMap { relativeTime($0.lastUpdated) } : nil,
+            chevron: isGenerating ? nil : chevronState,
+            // No CTA — the whole card opens the analysis (or generates the first one).
+            onTap: { if isGenerating { return }; analysis != nil ? onView() : onGenerate() }
         )
-        .contentShape(Rectangle())
-        .onTapGesture { if analysis != nil { onView() } }
     }
 
     private var bodyLine: String? {
         if isGenerating { return nil }
         if let a = analysis { return (a.headline?.isEmpty == false) ? a.headline : nil }
         if isLoading { return "Loading your health analysis…" }
-        return "Generate your first AI-powered health analysis based on your health data."
+        return "Tap to generate your first AI-powered health analysis."
+    }
+
+    // Red for a critical result, yellow when new health data means the analysis is out of date.
+    private var chevronState: StandardCard.Chevron {
+        guard let a = analysis else { return .normal }
+        if a.healthAnalysisStatus?.level?.lowercased() == "critical" { return .urgent }
+        if a.dataChangesSinceAnalysis?.hasChanges == true { return .attention }
+        return .normal
     }
 
     // Generating shows a spinner as structured body content (no meta divider).
@@ -255,35 +264,14 @@ private struct HealthAnalysisCardView: View {
             }
         )
     }
-
-    // Empty state: prominent Generate button in the meta slot.
-    private var footerOverflow: AnyView? {
-        guard analysis == nil, !isLoading, !isGenerating else { return nil }
-        return AnyView(
-            Button(action: onGenerate) {
-                Label("Generate Analysis", systemImage: "sparkles")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.brandTeal)
-        )
-    }
 }
 
 // MARK: - Device sync card (Apple Health / Apple Watch)
 
 private struct DeviceSyncCardView: View {
     let isConnected: Bool
-    let heartRate: Int?
-    let heartRateAt: Date?
     let lastSyncTS: Double
     let onTap: () -> Void
-
-    private var subtitle: String {
-        guard lastSyncTS > 0 else { return "Sync heart rate, steps & more" }
-        return "Synced \(Date(timeIntervalSince1970: lastSyncTS).formatted(.relative(presentation: .named)))"
-    }
 
     /// Compact age: 1s / 1m / 1h / 1d / 1y — whole numbers, no decimals.
     private func shortAge(_ date: Date) -> String {
@@ -298,34 +286,20 @@ private struct DeviceSyncCardView: View {
     }
 
     var body: some View {
-        // Canonical card — §2A. Icon tile, teal title, connection status chip and subtitle come
-        // from StandardCard slots; the inline heart-rate metric is bespoke footer content.
+        // Canonical card — §2A. The heart-rate reading lives INSIDE the sheet (WatchSyncSheetView),
+        // not on the card face: the face is just icon · title · description · status chip · last-sync date.
         StandardCard(
             icon: "applewatch",
             title: "Apple Health",
             titleColor: Theme.brandTeal,
-            subtitle: subtitle,
+            subtitle: "Sync heart rate, steps & more",
             subtitleLineLimit: 1,
             // Status signal — §12: green = connected, orange = not connected.
             statusText: isConnected ? "Connected" : "Not connected",
             statusLevel: isConnected ? .green : .orange,
-            footerView: metricView,
-            date: (isConnected && heartRate != nil) ? heartRateAt.map(shortAge) : nil
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { onTap() }
-    }
-
-    // Once connected, the headline heart-rate metric fills the meta slot (bottom-left);
-    // its age lands in the date slot (bottom-right) — same as every other card.
-    private var metricView: AnyView? {
-        guard isConnected, let hr = heartRate else { return nil }
-        return AnyView(
-            HStack(spacing: Theme.Spacing.xs) {
-                Image(systemName: "heart.fill").foregroundStyle(Theme.brandTeal)
-                Text("\(hr)").font(.title3.bold())
-                Text("bpm").font(.caption).foregroundStyle(.secondary)
-            }
+            date: lastSyncTS > 0 ? shortAge(Date(timeIntervalSince1970: lastSyncTS)) : nil,
+            chevron: .normal,
+            onTap: onTap
         )
     }
 }
@@ -344,12 +318,17 @@ private struct CheckInCardView: View {
             subtitle: checkIn?.subtitleText ?? "Loading…",
             statusText: checkIn?.stateLabel,
             statusLevel: checkIn?.stateLevel,
-            ctaTitle: (checkIn?.canAccess != false) ? checkIn?.actionLabel : nil,
-            ctaAction: onTap,
-            date: checkIn.flatMap { relativeTime($0.lastCompletedAt) }
+            date: checkIn.flatMap { relativeTime($0.lastCompletedAt) },
+            chevron: chevronState,
+            onTap: { if checkIn != nil { onTap() } }
         )
-        .contentShape(Rectangle())
-        .onTapGesture { if checkIn != nil { onTap() } }
+    }
+
+    // Yellow when there's something to do (due / pending / in progress) AND the user can act on it
+    // (gated on canAccess to match Android), else a plain tap arrow.
+    private var chevronState: StandardCard.Chevron {
+        guard let c = checkIn, c.canAccess != false else { return .normal }
+        return c.state == .allCaughtUp ? .normal : .attention
     }
 }
 
@@ -369,9 +348,13 @@ private struct DigestCardView: View {
             statusLevel: aqiChipLevel,
             bodyText: bodyLine,
             bodyLineLimit: isExpanded ? nil : 3,
-            // "Read more" is a CTA → canonical CTA slot/style.
-            ctaTitle: (digest?.content.isEmpty == false) ? (isExpanded ? "Show less" : "Read more") : nil,
-            ctaAction: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }
+            date: relativeTime(digest?.generatedAt),
+            // Yellow when health data changed after this advisory was generated.
+            chevron: (digest?.stale == true) ? .attention : .normal,
+            // No CTA — tapping the card expands/collapses the full advisory.
+            onTap: (digest?.content.isEmpty == false)
+                ? { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }
+                : nil
         )
     }
 
@@ -498,12 +481,17 @@ private struct AQICardView: View {
 private struct DietaryInsightsCardView: View {
     let insights: DietaryInsightsResponse?
     let isLoading: Bool
+    let onRefresh: () -> Void
     var body: some View {
         StandardCard(
             icon: "leaf",
             title: "Dietary Insights",
             titleColor: Theme.brandTeal,
-            bodyView: AnyView(dietaryBody)
+            bodyView: AnyView(dietaryBody),
+            date: relativeTime(insights?.lastUpdated),
+            // Yellow when health data changed after these insights were generated; tap to refresh.
+            chevron: (insights?.stale == true) ? .attention : .normal,
+            onTap: (insights != nil) ? onRefresh : nil
         )
     }
 
@@ -551,6 +539,8 @@ private struct DietaryInsightsCardView: View {
 // NutriCheck is its own feature (Android parity) — a dedicated launcher card, not a control
 // on Dietary Insights. Tapping opens the NutriCheck sheet.
 private struct NutriCheckCardView: View {
+    let lastCheckedAt: String?
+    let isStale: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -559,12 +549,20 @@ private struct NutriCheckCardView: View {
             title: "NutriCheck",
             titleColor: Theme.brandTeal,
             subtitle: "Check if a food fits your health profile",
-            ctaTitle: "Check a food",
-            ctaAction: onTap
+            date: relativeTime(lastCheckedAt),
+            chevron: isStale ? .attention : .normal,
+            onTap: onTap
         )
-        .contentShape(Rectangle())
-        .onTapGesture { onTap() }
     }
+}
+
+/// NutriCheck launcher is "stale" when new health data has been added since the user's last check.
+private func nutriCheckIsStale(_ analysis: HealthAnalysis?) -> Bool {
+    guard let last = analysis?.lastNutriCheckAt,
+          let changed = analysis?.lastHealthDataChange,
+          let lastD = isoDate(last),
+          let changedD = isoDate(changed) else { return false }
+    return changedD > lastD
 }
 
 // MARK: - Feed preview section
@@ -816,6 +814,18 @@ private struct InlineLoader: View {
 }
 
 // MARK: - Time helper
+
+/// Parses the backend's ISO 8601 date strings (millis / seconds / date-only) into a `Date`.
+private func isoDate(_ isoString: String?) -> Date? {
+    guard let str = isoString else { return nil }
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    for fmt in ["yyyy-MM-dd'T'HH:mm:ss.SSSZ", "yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd"] {
+        df.dateFormat = fmt
+        if let date = df.date(from: str) { return date }
+    }
+    return nil
+}
 
 /// Converts an ISO 8601 date string to a relative label — mirrors Android HomeFragment "X ago" labels.
 private func relativeTime(_ isoString: String?) -> String? {

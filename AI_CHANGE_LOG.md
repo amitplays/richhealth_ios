@@ -2,6 +2,32 @@
 
 ---
 
+## [2026-08-09] Services cards — status chevron + whole-card tap, no CTAs (cross-platform consistency pass)
+
+Owner goal: make the Services dashboard cards fully consistent AND matched to Android — one component, no scattered CTAs, a status-colour chevron, and the heart-rate reading moved off the Apple Health card face. Done alongside matching Android work (new reusable `ServiceCardView`) and a small backend addition; iOS card SET unchanged (Workouts/Doctor stay exempt).
+
+**`DesignSystem/Components/StandardCard.swift`**
+- Added a trailing status `chevron:` slot (`enum Chevron { normal, attention, urgent }`) — vertically centred, thin (`chevron.right`, 15pt semibold). Colour is a status signal SEPARATE from the chip: `.urgent` red, `.attention` yellow, `.normal` tertiary.
+- Added `onTap:` — the WHOLE card is now the tap target (card density only; rows keep their own gestures). Wrapped in a `.plain` Button for accessibility.
+- Icon now pinned to the top edge on tall cards; content column `.topLeading`. `ctaTitle`/`ctaAction`/`footerView` kept for in-sheet cards only.
+
+**`Features/Services/ServicesHomeView.swift`** — removed ALL dashboard CTAs; every card is now tap-to-open with a chevron:
+- Health Analysis: chevron red if status critical → yellow if data changed → normal; tap opens analysis (or generates the first one). Removed the "Generate"/"View Full Analysis" buttons.
+- Apple Health: **heart-rate metric removed from the card face** (it's inside `WatchSyncSheetView`); face = status chip + last-sync date; chevron normal; tap opens the sheet.
+- Daily Check-In: chevron yellow when due/pending/in-progress; tap opens check-in.
+- Daily Advisory: removed "Read more" — tap expands inline; chevron yellow when `stale`; date = `generatedAt`.
+- Dietary Insights: date = `lastUpdated`; chevron yellow when `stale`; tap refreshes (new `refreshDietary()` on the VM).
+- NutriCheck launcher: shows "Last checked" date + yellow chevron when new health data since last check (`lastNutriCheckAt` vs `lastHealthDataChange`).
+- AQI left as an informational card (no chevron/tap — no destination); Workouts & Doctor remain owner-exempt.
+
+**`Models/ServicesModels.swift`** — `DailyDigestResponse` +`generatedAt`/`stale`; `DietaryInsightsResponse` +`lastUpdated`/`stale`; `HealthAnalysis` +`lastNutriCheckAt`/`lastHealthDataChange` (all already in the backend response; the last two are exposed by the analysis endpoint).
+
+**Backend (../richhealthbackend)** — `daily-digest` now returns `generatedAt`+`stale`; `dietary-insights` now returns `lastUpdated`+`stale`. Additive, non-breaking.
+
+§27 updated to document the chevron/tap contract.
+
+---
+
 ## [2026-08-09] StandardCard — one canonical card+row layout (fixed slot map)
 
 Audited every card/list across all 17 owner screenshots + the live code (3 Explore agents: HealthHub sheets, Services cards, Profile/Richie). Built ONE canonical layout with a **fixed slot map** — every value has one reserved position and never moves based on what else is present. A card with {title, subtitle, chip} and a card with {…, date} put each shared value in the identical place; a 5th/bespoke value goes to a footer overflow slot, never into a reserved slot.

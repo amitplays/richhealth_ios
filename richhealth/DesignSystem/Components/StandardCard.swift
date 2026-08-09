@@ -28,6 +28,10 @@ import SwiftUI
 /// - CTA (`ctaTitle`) — bottom-left, always teal `.subheadline.semibold` (one CTA style everywhere)
 /// - footer (`footerView`) — bottom-left alternative to the CTA for bespoke content (metric, chart, progress)
 /// - date — bottom-right
+/// - chevron (`chevron`) — trailing, vertically-centred status arrow. Its COLOUR is a status signal
+///   separate from the chip: `.urgent` red, `.attention` yellow, `.normal` tertiary. It is the tap
+///   affordance that replaces per-card CTAs.
+/// - onTap — the WHOLE card is the tap target (Services dashboard cards are chevron-driven, not CTA-driven).
 /// - a Divider always separates the meta row from the content above it, on every card that has one.
 ///
 /// Density unifies lists and cards with the same slots:
@@ -36,6 +40,22 @@ import SwiftUI
 struct StandardCard: View {
 
     enum Density { case card, row }
+
+    /// Trailing status chevron (§27). Separate signal from the status chip: the chip labels the
+    /// state, the chevron colour flags urgency/attention. `.urgent` = red (Urgent/Important),
+    /// `.attention` = yellow (needs attention / stale), `.normal` = tertiary (just "tap to open").
+    enum Chevron {
+        case normal, attention, urgent
+        // AnyShapeStyle so `.normal` can use the hierarchical `.tertiary` style (there is no
+        // `Color.tertiary`); attention/urgent use the StatusLevel colours.
+        var style: AnyShapeStyle {
+            switch self {
+            case .normal:    return AnyShapeStyle(.tertiary)
+            case .attention: return AnyShapeStyle(StatusLevel.yellow.color)
+            case .urgent:    return AnyShapeStyle(StatusLevel.red.color)
+            }
+        }
+    }
 
     var density: Density = .card
     /// Row-only tighter variant (e.g. Apple Watch imports): smaller icon + tighter height.
@@ -81,10 +101,22 @@ struct StandardCard: View {
     /// Bottom-right timestamp.
     var date: String? = nil
 
+    // Trailing chevron + whole-card tap (§27 — cards are chevron-driven, not CTA-driven).
+    /// Trailing status chevron. `nil` = no chevron (e.g. purely informational cards, or `.row`).
+    var chevron: Chevron? = nil
+    /// When set, the WHOLE card is the tap target (replaces per-card CTAs). Rows keep their own
+    /// external gestures, so this is card-density only.
+    var onTap: (() -> Void)? = nil
+
     var body: some View {
         switch density {
         case .card:
-            GlassCard { cardContent }
+            if let onTap {
+                Button(action: onTap) { GlassCard { cardContent } }
+                    .buttonStyle(.plain)
+            } else {
+                GlassCard { cardContent }
+            }
         case .row:
             rowContent.padding(.vertical, compact ? 3 : Theme.Spacing.s)
         }
@@ -93,8 +125,10 @@ struct StandardCard: View {
     // MARK: - Card layout (single content column right of the icon)
 
     private var cardContent: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.m) {
+        HStack(spacing: Theme.Spacing.m) {
+            // Icon stays pinned to the top edge even on tall cards.
             leadingSlot
+                .frame(maxHeight: .infinity, alignment: .top)
             VStack(alignment: .leading, spacing: Theme.Spacing.s) {
                 HStack(alignment: .top, spacing: Theme.Spacing.s) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -112,7 +146,14 @@ struct StandardCard: View {
                 warningLabel
                 metaRow
             }
-            .frame(maxWidth: .infinity, alignment: .leading)   // §18 stretch to width
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)   // §18 stretch to width
+            // Trailing status chevron — vertically centred against the whole card.
+            if let chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(chevron.style)
+                    .frame(maxHeight: .infinity, alignment: .center)
+            }
         }
     }
 
