@@ -227,9 +227,7 @@ private struct HealthAnalysisCardView: View {
             bodyText: bodyLine,
             bodyLineLimit: 2,
             bodyView: bodyOverflow,
-            // Data-changed badge — complements the attention chevron with a spelled-out reason.
-            warning: (!isGenerating && analysis?.dataChangesSinceAnalysis?.hasChanges == true)
-                     ? "New data — tap to refresh insights" : nil,
+            // No warning banner — the yellow attention chevron already flags "new data / out of date".
             date: (analysis != nil && !isGenerating) ? analysis.flatMap { relativeTime($0.lastUpdated) } : nil,
             chevron: isGenerating ? nil : chevronState,
             // No CTA — the whole card opens the analysis (or generates the first one).
