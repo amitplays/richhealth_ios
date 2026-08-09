@@ -1,17 +1,12 @@
-//
-//  richhealthApp.swift
-//  richhealth
-//
-//  Created by Ams on 2026-08-06.
-//
-
 import SwiftUI
 
-@main
-struct richhealthApp: App {
+@main struct richhealthApp: App {
+    @State private var appEnv = AppEnvironment()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(appEnv)
         }
     }
 }

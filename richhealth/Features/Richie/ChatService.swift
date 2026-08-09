@@ -1,0 +1,87 @@
+import Foundation
+
+/// Network layer for Richie chat. All paths confirmed against ../richhealthbackend/routes/chatRoutes.js.
+struct ChatService {
+    private let api = APIClient()
+
+    // POST /api/chat/sessions
+    // dependentId: pass the dependent's _id to chat on their behalf; nil = chat as self
+    func createSession(title: String? = nil, dependentId: String? = nil) async throws -> ChatSessionDTO {
+        let body = try JSONEncoder().encode(CreateSessionRequest(title: title, dependentId: dependentId))
+        return try await api.send(
+            // No global loader — part of the send flow, which shows its own thinking bubble.
+            Endpoint(path: "/api/chat/sessions", method: .post, body: body, showsLoader: false),
+            as: ChatSessionDTO.self
+        )
+    }
+
+    // GET /api/dependents/users — always-active dependents the user can chat on behalf of
+    func getDependents() async throws -> [DependentEntry] {
+        let response = try await api.send(
+            Endpoint(path: "/api/dependents/users", showsLoader: false, loaderMessage: "Loading dependents…"),
+            as: DependentsListResponse.self
+        )
+        return response.dependents
+    }
+
+    // GET /api/chat/sessions (sorted newest-first, max 20 — backend enforced)
+    func getSessions() async throws -> [ChatSessionDTO] {
+        return try await api.send(
+            Endpoint(path: "/api/chat/sessions", showsLoader: false, loaderMessage: "Loading your chats…"),
+            as: [ChatSessionDTO].self
+        )
+    }
+
+    // GET /api/chat/sessions/:sessionId/messages
+    func getMessages(sessionId: String) async throws -> [ChatMessageDTO] {
+        return try await api.send(
+            Endpoint(path: "/api/chat/sessions/\(sessionId)/messages", showsLoader: false, loaderMessage: "Loading conversation…"),
+            as: [ChatMessageDTO].self
+        )
+    }
+
+    // POST /api/chat/sessions/:sessionId/messages
+    // model: pass nil or "auto" to use session default; pass a specific model id to override.
+    func sendMessage(_ text: String, sessionId: String, model: String = "auto") async throws -> SendMessageResponse {
+        let modelType: String? = (model.isEmpty || model == "auto") ? nil : model
+        let body = try JSONEncoder().encode(SendMessageRequest(message: text, modelType: modelType))
+        return try await api.send(
+            // No global loader — the chat UI shows its own thinking bubble while awaiting the reply.
+            Endpoint(path: "/api/chat/sessions/\(sessionId)/messages", method: .post, body: body, showsLoader: false),
+            as: SendMessageResponse.self
+        )
+    }
+
+    // DELETE /api/chat/sessions/:sessionId
+    func deleteSession(sessionId: String) async throws {
+        try await api.send(
+            Endpoint(path: "/api/chat/sessions/\(sessionId)", method: .delete, showsLoader: false, loaderMessage: "Deleting chat…")
+        )
+    }
+
+    // GET /api/chat/suggestions
+    func getSuggestions() async throws -> ChatSuggestionsResponse {
+        return try await api.send(
+            Endpoint(path: "/api/chat/suggestions", showsLoader: false, loaderMessage: "Loading suggestions…"),
+            as: ChatSuggestionsResponse.self
+        )
+    }
+
+    // POST /api/chat/sessions/:sessionId/log
+    // Persists a quick-log confirmation as a type="log" message (Android logCardToChat).
+    // Returns the created log message so it can be appended locally with its real _id.
+    func logDataEntry(sessionId: String, text: String) async throws -> ChatMessageDTO {
+        let body = try JSONEncoder().encode(["text": text])
+        return try await api.send(
+            Endpoint(path: "/api/chat/sessions/\(sessionId)/log", method: .post, body: body, showsLoader: false),
+            as: ChatMessageDTO.self
+        )
+    }
+
+    // PUT /api/chat/messages/:messageId/saved
+    func toggleSaved(messageId: String) async throws {
+        try await api.send(
+            Endpoint(path: "/api/chat/messages/\(messageId)/saved", method: .put, showsLoader: false, loaderMessage: "Saving…")
+        )
+    }
+}
