@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Branded loading indicator — the iOS equivalent of Android's `SimpleProgress`
 /// (layout_simple_progress.xml): full-screen dim + centered card with the RichHealth
-/// logo spinning 0→360° over 2s, a status message, and the "RichHealth AI" subtitle.
+/// logo spinning 0→360° over 2s and a status message (evenly padded on all sides).
 /// The card uses the native Liquid Glass surface (GlassCard / .glassEffect), not a flat fill.
 struct BrandedLoaderView: View {
     var message: String = "Loading…"
@@ -34,12 +34,10 @@ struct BrandedLoaderView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.center)
-
-                    Text("RichHealth AI")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.brandTeal)
                 }
-                .frame(minWidth: 160)
+                // Even padding all around the logo + message (consistent on every side).
+                .padding(Theme.Spacing.m)
+                .frame(minWidth: 180)
             }
         }
         .allowsHitTesting(true)
