@@ -527,10 +527,12 @@ private struct ChatBubbleView: View {
                             HStack(spacing: Theme.Spacing.xs) {
                                 Image(systemName: "chevron.right")
                                     .rotationEffect(.degrees(showReasoning ? 90 : 0))
+                                Image(systemName: "brain")
                                 Text("Thought process")
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .padding(.vertical, Theme.Spacing.xs)   // breathing room around the row
                         }
                         .buttonStyle(.plain)
 
