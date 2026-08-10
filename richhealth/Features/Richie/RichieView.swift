@@ -95,13 +95,10 @@ struct RichieView: View {
                 .padding(.horizontal, Theme.Spacing.l)
                 .padding(.top, Theme.Spacing.xxl)
 
-                // Limit banner — surfaced here too, not just in the message list. When a limit is
-                // hit on the FIRST message of a new chat, send() removes the temp message and we fall
-                // back to this empty state; without this the monthly/session limit was silently swallowed.
-                if vm.limitKind == .monthlySessionLimit {
-                    monthlyLimitBanner
-                        .padding(.horizontal, Theme.Spacing.m)
-                } else if vm.limitKind == .sessionMessageLimit {
+                // Session-full → inline "Start New Chat" card (a new chat is the fix there).
+                // The MONTHLY limit is a paywall situation: it presents the PaywallView bottom
+                // sheet (with plans) from send()/handleSendError — no inline card.
+                if vm.limitKind == .sessionMessageLimit {
                     sessionLimitBanner
                         .padding(.horizontal, Theme.Spacing.m)
                 }
@@ -253,14 +250,9 @@ struct RichieView: View {
                             .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
 
-                    // Session-level limit: chat is full, start new
+                    // Session-level limit: chat is full, start new. (Monthly limit → paywall sheet.)
                     if vm.limitKind == .sessionMessageLimit {
                         sessionLimitBanner.id("limitBanner")
-                    }
-
-                    // Monthly limit: cannot start new chat, must upgrade or wait for reset
-                    if vm.limitKind == .monthlySessionLimit {
-                        monthlyLimitBanner.id("limitBanner")
                     }
 
                     Color.clear.frame(height: 1).id("bottom")
@@ -295,24 +287,6 @@ struct RichieView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-        }
-    }
-
-    // Monthly session limit: quota exhausted — cannot create new sessions this month
-    private var monthlyLimitBanner: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                Label("Monthly chat limit reached", systemImage: "calendar.badge.exclamationmark")
-                    .font(.subheadline.weight(.medium))
-                Text("You've used all your chat sessions for this month. Upgrade to continue, or wait until the 1st.")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: Theme.Spacing.s) {
-                    Spacer()
-                    Button("Upgrade to Pro") { vm.showPaywall = true }
-                        .buttonStyle(.borderedProminent).tint(Theme.brandTeal)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

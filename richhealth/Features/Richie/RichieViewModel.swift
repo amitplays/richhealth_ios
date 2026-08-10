@@ -219,8 +219,10 @@ final class RichieViewModel {
         case .server(let status, let msg) where status == 400:
             let lower = (msg ?? "").lowercased()
             if lower.contains("monthly session limit") || lower.contains("session limit reached") {
-                // Monthly quota exhausted: user cannot start new chats until reset date.
+                // Monthly quota exhausted → present the paywall bottom sheet (with plans),
+                // not an inline card. User can upgrade or wait for the monthly reset.
                 limitKind = .monthlySessionLimit
+                showPaywall = true
             } else if lower.contains("limit reached") || lower.contains("session limit") {
                 limitKind = .sessionMessageLimit
             } else {
