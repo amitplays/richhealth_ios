@@ -59,7 +59,8 @@ struct SelectableCardGrid: View {
             LazyVGrid(columns: gridItems, spacing: Theme.Spacing.s) {
                 ForEach(options) { option in
                     SelectableCard(option: option, isSelected: selection == option.value) {
-                        selection = option.value
+                        // Animate the mutation so progressive-reveal of the next question eases in.
+                        withAnimation(.easeInOut(duration: 0.25)) { selection = option.value }
                     }
                 }
             }
@@ -101,17 +102,19 @@ struct MultiSelectCardGrid: View {
     }
 
     private func toggle(_ option: SelectableCardOption) {
-        if selection.contains(option.value) {
-            selection.remove(option.value)
-            return
-        }
-        if option.isNone {
-            // "None" is exclusive — clears every other selection.
-            selection = [option.value]
-        } else {
-            // Any real selection clears the mutually-exclusive "None" options.
-            for none in options where none.isNone { selection.remove(none.value) }
-            selection.insert(option.value)
+        withAnimation(.easeInOut(duration: 0.25)) {
+            if selection.contains(option.value) {
+                selection.remove(option.value)
+                return
+            }
+            if option.isNone {
+                // "None" is exclusive — clears every other selection.
+                selection = [option.value]
+            } else {
+                // Any real selection clears the mutually-exclusive "None" options.
+                for none in options where none.isNone { selection.remove(none.value) }
+                selection.insert(option.value)
+            }
         }
     }
 }
@@ -128,23 +131,23 @@ private struct SelectableCard: View {
             HStack(spacing: Theme.Spacing.s) {
                 if let icon = option.systemImage {
                     Image(systemName: icon)
-                        .font(.system(size: Theme.IconSize.inline, weight: .medium))
+                        .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(isSelected ? Theme.brandTeal : .secondary)
-                        .frame(width: 24)
+                        .frame(width: 26)
                 }
                 Text(option.title)
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: Theme.IconSize.inline))
+                        .font(.system(size: 18))
                         .foregroundStyle(Theme.brandTeal)
                 }
             }
             .padding(Theme.Spacing.m)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
             .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.CornerRadius.input)

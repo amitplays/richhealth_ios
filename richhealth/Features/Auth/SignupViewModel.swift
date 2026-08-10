@@ -126,8 +126,8 @@ enum SignupStep: CaseIterable {
     var menstrualStatus = "not_applicable"   // regular|irregular|perimenopause|menopause|prefer_not_to_say
     var menstrualSymptoms: Set<String> = []
     var pregnancyStatus = "not_applicable"   // not_pregnant|pregnant|postpartum|trying_to_conceive
-    var cycleLengthSel = "28"                // maps to Int
-    var periodLengthSel = "5"                // maps to Int
+    var cycleLengthSel = ""                   // maps to Int (empty until picked; falls back at submit)
+    var periodLengthSel = ""                  // maps to Int (empty until picked; falls back at submit)
     var contraceptionMethod = ""             // none|pill|iud|condom|implant|<other>
     var contraceptionOther = ""
 
@@ -138,7 +138,7 @@ enum SignupStep: CaseIterable {
     var waistUnknown = true                  // true → not provided (Android's cb_waist_unknown)
 
     // ─── Step 4: Goal ────────────────────────────────────────────────────────
-    var primaryGoal = "Improve Fitness"
+    var primaryGoal = ""                      // empty until picked (progressive reveal)
     var primaryGoalOther = ""
     var recentWeightChange = ""              // Gained|Lost|Stable|Not sure
 
@@ -154,8 +154,8 @@ enum SignupStep: CaseIterable {
     var dietTypeOther = ""
 
     // ─── Step 8: Meals + Water ───────────────────────────────────────────────
-    var mealsPerDaySel = "3"                 // maps to Int (2|3|4|6)
-    var waterIntakeSel = "5"                 // maps to Int glasses (2|5|8|10)
+    var mealsPerDaySel = ""                   // maps to Int (2|3|4|6); empty until picked
+    var waterIntakeSel = ""                   // maps to Int glasses (2|5|8|10); empty until picked
 
     // ─── Step 9: Sleep ───────────────────────────────────────────────────────
     var sleepHours: Double = 7
@@ -167,9 +167,9 @@ enum SignupStep: CaseIterable {
     var screenTimeBeforeBed = "moderate"     // low|moderate|high|very_high
 
     // ─── Step 12: Habits ─────────────────────────────────────────────────────
-    var smokingStatus = "never"              // never|ex|social|occasional|regular
-    var alcoholConsumption = "None"          // None|Special Occasions|Socially|Regularly|Frequently
-    var caffeineHabit = "none"               // none|tea|coffee|energy_drinks|<other>
+    var smokingStatus = ""                    // never|ex|social|occasional|regular (empty until picked)
+    var alcoholConsumption = ""               // None|Special Occasions|Socially|Regularly|Frequently (empty until picked)
+    var caffeineHabit = ""                    // none|tea|coffee|energy_drinks|<other> (empty until picked)
     var caffeineOther = ""
 
     // ─── Step 13: Smoking detail (conditional) ───────────────────────────────
@@ -381,7 +381,7 @@ enum SignupStep: CaseIterable {
         .init("Cancer",               title: "Cancer",         systemImage: "cross.case"),
         .init("Stroke",               title: "Stroke",         systemImage: "brain"),
         .init("Thyroid Issues",       title: "Thyroid Issues", systemImage: "bolt.heart"),
-        .init("Kidney Disease",       title: "Kidney Disease", systemImage: "kidneys"),
+        .init("Kidney Disease",       title: "Kidney Disease", systemImage: "cross.case.fill"),
         .init("Mental Health Issues", title: "Mental Health",  systemImage: "brain.head.profile"),
         .other(),
         .init("__none__", title: "None / Not Sure", systemImage: "xmark.circle", isNone: true)
@@ -422,7 +422,7 @@ enum SignupStep: CaseIterable {
         .init("PCOS/Hormonal Issues", title: "PCOS/Hormonal",    systemImage: "drop.circle"),
         .init("Anxiety/Depression",   title: "Anxiety/Depression", systemImage: "brain.head.profile"),
         .init("Digestive Issues",     title: "Digestive Issues", systemImage: "fork.knife.circle"),
-        .init("Kidney Issues",        title: "Kidney Issues",    systemImage: "kidneys"),
+        .init("Kidney Issues",        title: "Kidney Issues",    systemImage: "cross.case.fill"),
         .other(),
         .init("__none__", title: "None of the above", systemImage: "xmark.circle", isNone: true)
     ]
@@ -583,11 +583,17 @@ enum SignupStep: CaseIterable {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
 
+        // These card questions start empty (for progressive reveal); if the user skipped
+        // the step entirely, fall back to sensible defaults so the payload stays valid.
+        let finalSmoking  = smokingStatus.isEmpty ? "never" : smokingStatus
+        let finalAlcohol  = alcoholConsumption.isEmpty ? "None" : alcoholConsumption
+        let finalCaffeine = caffeineHabit.isEmpty ? "none" : caffeineHabit
+
         // Derived smoking fields (mirror Android's habits collector switch).
         let smoker: Bool
         let smokingLevel: Int
         let smokingFrequency: String
-        switch smokingStatus {
+        switch finalSmoking {
         case "social":     smoker = false; smokingLevel = 1; smokingFrequency = "Social"
         case "occasional": smoker = true;  smokingLevel = 2; smokingFrequency = "Occasional"
         case "regular":    smoker = true;  smokingLevel = 3; smokingFrequency = "Regular"
@@ -596,7 +602,7 @@ enum SignupStep: CaseIterable {
 
         // Derived alcohol level (mirror Android).
         let alcoholLevel: Int
-        switch alcoholConsumption {
+        switch finalAlcohol {
         case "Special Occasions": alcoholLevel = 1
         case "Socially":          alcoholLevel = 2
         case "Regularly":         alcoholLevel = 3
@@ -607,7 +613,7 @@ enum SignupStep: CaseIterable {
         let resolvedGoal        = resolveSingle(primaryGoal, other: primaryGoalOther)
         let resolvedOccupation  = resolveSingle(occupationType, other: occupationOther)
         let resolvedDiet        = resolveSingle(dietType, other: dietTypeOther)
-        let resolvedCaffeine    = resolveSingle(caffeineHabit, other: caffeineOther)
+        let resolvedCaffeine    = resolveSingle(finalCaffeine, other: caffeineOther)
         let resolvedContra      = resolveSingle(contraceptionMethod, other: contraceptionOther)
         let resolvedConditions  = resolveList(medicalConditions, other: medicalConditionsOther)
 
@@ -644,8 +650,8 @@ enum SignupStep: CaseIterable {
             smoker: smoker,
             smokingLevel: smokingLevel,
             smokingFrequency: smokingFrequency,
-            smokingStatus: smokingStatus,
-            alcoholConsumption: alcoholConsumption,
+            smokingStatus: finalSmoking,
+            alcoholConsumption: finalAlcohol,
             alcoholLevel: alcoholLevel,
             caffeineHabit: resolvedCaffeine,
             smokingDuration: smokingDuration.isEmpty ? nil : smokingDuration,

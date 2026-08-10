@@ -6,6 +6,7 @@ import SwiftUI
 /// submits the account, then an OTP step verifies the email.
 struct SignupView: View {
     @Environment(AppEnvironment.self) private var appEnv
+    @Environment(\.dismiss) private var dismiss
     @State private var vm = SignupViewModel()
 
     var body: some View {
@@ -17,7 +18,20 @@ struct SignupView: View {
             }
         }
         .navigationTitle(vm.isAccountCreated ? "Verify email" : vm.currentStep.title)
-        .navigationBarBackButtonHidden(vm.isAccountCreated)
+        // Own the back button: within the form it steps BACK one question-set; at step 0 it
+        // exits to login. (Default back popped straight to login from any step.)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            if !vm.isAccountCreated {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        if vm.stepIndex > 0 { withAnimation { vm.back() } } else { dismiss() }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                }
+            }
+        }
     }
 
     // ─── OTP Step ─────────────────────────────────────────────────────────────
@@ -107,54 +121,56 @@ struct SignupView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, Theme.Spacing.m)
                 }
-
-                navigationButtons
-                    .padding(.horizontal, Theme.Spacing.m)
-                    .padding(.bottom, Theme.Spacing.xl)
             }
+            .padding(.bottom, Theme.Spacing.m)
         }
         .scrollDismissesKeyboard(.interactively)
+        // One consistent primary button, pinned to the bottom on every step.
+        .safeAreaInset(edge: .bottom) { navigationButtons }
         .id(vm.stepIndex) // reset scroll position between steps
     }
 
+    // Single primary CTA (Continue / Create account), fixed at the bottom, consistent shape.
+    // Back is handled by the top-left chevron, so there's only one button shape per step.
     private var navigationButtons: some View {
-        VStack(spacing: Theme.Spacing.s) {
+        Button {
             if vm.isLastStep {
-                Button {
-                    Task { await vm.submit(auth: appEnv.auth) }
-                } label: {
-                    Group {
-                        if vm.isLoading {
-                            HStack(spacing: Theme.Spacing.s) {
-                                ProgressView().tint(.white) // contrast on teal button
-                                Text("Creating account…")
-                            }
-                        } else {
-                            Text("Create account")
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.brandTeal)
-                .disabled(vm.isLoading)
+                Task { await vm.submit(auth: appEnv.auth) }
             } else {
-                Button {
-                    vm.next()
-                } label: {
-                    Text("Continue")
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
+                withAnimation { vm.next() }
+            }
+        } label: {
+            Group {
+                if vm.isLoading {
+                    HStack(spacing: Theme.Spacing.s) {
+                        ProgressView().tint(.white) // contrast on teal button
+                        Text("Creating account…")
+                    }
+                } else {
+                    Text(vm.isLastStep ? "Create account" : "Continue")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.brandTeal)
             }
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.roundedRectangle(radius: Theme.CornerRadius.button))
+        .tint(Theme.brandTeal)
+        .disabled(vm.isLoading)
+        .padding(.horizontal, Theme.Spacing.m)
+        .padding(.vertical, Theme.Spacing.s)
+        .background(.bar)
+    }
 
-            if vm.stepIndex > 0 {
-                Button("Back") { vm.back() }
-                    .foregroundStyle(.secondary)
-            }
+    // ─── Progressive reveal helpers ────────────────────────────────────────────
+    // Show a question only once the previous one is answered — no "question vomit".
+    private func answered(_ s: String) -> Bool { !s.isEmpty && s != "not_applicable" }
+    private func answered(_ set: Set<String>) -> Bool { !set.isEmpty }
+
+    @ViewBuilder private func reveal<C: View>(_ show: Bool, @ViewBuilder _ content: () -> C) -> some View {
+        if show {
+            content().transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -221,8 +237,8 @@ struct SignupView: View {
     @ViewBuilder private var stepPersonalContent: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text("Gender")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.brandTeal)
             Picker("Gender", selection: $vm.gender) {
                 Text("Select").tag("")
                 ForEach(vm.genderOptions, id: \.self) { Text($0).tag($0) }
@@ -232,8 +248,8 @@ struct SignupView: View {
 
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text("Date of birth")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.brandTeal)
             HStack {
                 DatePicker(
                     "",
@@ -266,22 +282,28 @@ struct SignupView: View {
         sectionHeader("What's your cycle like?")
         SelectableCardGrid(options: vm.menstrualStatusOptions, selection: $vm.menstrualStatus)
 
-        sectionHeader("Any common symptoms?")
-        MultiSelectCardGrid(options: vm.menstrualSymptomOptions, selection: $vm.menstrualSymptoms)
-
-        sectionHeader("Pregnancy status")
-        SelectableCardGrid(options: vm.pregnancyOptions, selection: $vm.pregnancyStatus)
-
-        sectionHeader("Average cycle length?")
-        SelectableCardGrid(options: vm.cycleLengthOptions, selection: $vm.cycleLengthSel)
-
-        sectionHeader("Typical period length?")
-        SelectableCardGrid(options: vm.periodLengthOptions, selection: $vm.periodLengthSel)
-
-        sectionHeader("Contraception method?")
-        SelectableCardGrid(options: vm.contraceptionOptions,
-                           selection: $vm.contraceptionMethod,
-                           otherText: $vm.contraceptionOther)
+        reveal(answered(vm.menstrualStatus)) {
+            sectionHeader("Any common symptoms?")
+            MultiSelectCardGrid(options: vm.menstrualSymptomOptions, selection: $vm.menstrualSymptoms)
+        }
+        reveal(answered(vm.menstrualSymptoms)) {
+            sectionHeader("Pregnancy status")
+            SelectableCardGrid(options: vm.pregnancyOptions, selection: $vm.pregnancyStatus)
+        }
+        reveal(answered(vm.pregnancyStatus)) {
+            sectionHeader("Average cycle length?")
+            SelectableCardGrid(options: vm.cycleLengthOptions, selection: $vm.cycleLengthSel)
+        }
+        reveal(answered(vm.cycleLengthSel)) {
+            sectionHeader("Typical period length?")
+            SelectableCardGrid(options: vm.periodLengthOptions, selection: $vm.periodLengthSel)
+        }
+        reveal(answered(vm.periodLengthSel)) {
+            sectionHeader("Contraception method?")
+            SelectableCardGrid(options: vm.contraceptionOptions,
+                               selection: $vm.contraceptionMethod,
+                               otherText: $vm.contraceptionOther)
+        }
     }
 
     // ─── Body ─────────────────────────────────────────────────────────────────
@@ -299,8 +321,8 @@ struct SignupView: View {
 
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text("Waist circumference (optional)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.brandTeal)
             HStack {
                 Text(vm.waistUnknown ? "—" : "\(Int(vm.waistCircumferenceCm)) cm")
                     .font(.subheadline)
@@ -329,8 +351,10 @@ struct SignupView: View {
                            selection: $vm.primaryGoal,
                            otherText: $vm.primaryGoalOther)
 
-        sectionHeader("Has your weight changed recently?")
-        SelectableCardGrid(options: vm.recentWeightChangeOptions, selection: $vm.recentWeightChange)
+        reveal(answered(vm.primaryGoal)) {
+            sectionHeader("Has your weight changed recently?")
+            SelectableCardGrid(options: vm.recentWeightChangeOptions, selection: $vm.recentWeightChange)
+        }
     }
 
     // ─── Activity ─────────────────────────────────────────────────────────────
@@ -367,8 +391,10 @@ struct SignupView: View {
         sectionHeader("How many meals a day?")
         SelectableCardGrid(options: vm.mealsOptions, selection: $vm.mealsPerDaySel)
 
-        sectionHeader("How much water do you drink?")
-        SelectableCardGrid(options: vm.waterOptions, selection: $vm.waterIntakeSel)
+        reveal(answered(vm.mealsPerDaySel)) {
+            sectionHeader("How much water do you drink?")
+            SelectableCardGrid(options: vm.waterOptions, selection: $vm.waterIntakeSel)
+        }
     }
 
     // ─── Sleep ────────────────────────────────────────────────────────────────
@@ -402,13 +428,16 @@ struct SignupView: View {
         sectionHeader("Do you smoke?")
         SelectableCardGrid(options: vm.smokingOptions, selection: $vm.smokingStatus, columns: 1)
 
-        sectionHeader("How often do you drink alcohol?")
-        SelectableCardGrid(options: vm.alcoholOptions, selection: $vm.alcoholConsumption, columns: 1)
-
-        sectionHeader("What's your daily fuel?")
-        SelectableCardGrid(options: vm.caffeineOptions,
-                           selection: $vm.caffeineHabit,
-                           otherText: $vm.caffeineOther)
+        reveal(answered(vm.smokingStatus)) {
+            sectionHeader("How often do you drink alcohol?")
+            SelectableCardGrid(options: vm.alcoholOptions, selection: $vm.alcoholConsumption, columns: 1)
+        }
+        reveal(answered(vm.alcoholConsumption)) {
+            sectionHeader("What's your daily fuel?")
+            SelectableCardGrid(options: vm.caffeineOptions,
+                               selection: $vm.caffeineHabit,
+                               otherText: $vm.caffeineOther)
+        }
     }
 
     // ─── Smoking detail (conditional) ─────────────────────────────────────────
@@ -417,11 +446,14 @@ struct SignupView: View {
         sectionHeader("How long have you smoked?")
         SelectableCardGrid(options: vm.smokingDurationOptions, selection: $vm.smokingDuration)
 
-        sectionHeader("How many a day?")
-        SelectableCardGrid(options: vm.cigarettesPerDayOptions, selection: $vm.cigarettesPerDay)
-
-        sectionHeader("When did you last smoke?")
-        SelectableCardGrid(options: vm.lastSmokedOptions, selection: $vm.lastSmoked)
+        reveal(answered(vm.smokingDuration)) {
+            sectionHeader("How many a day?")
+            SelectableCardGrid(options: vm.cigarettesPerDayOptions, selection: $vm.cigarettesPerDay)
+        }
+        reveal(answered(vm.cigarettesPerDay)) {
+            sectionHeader("When did you last smoke?")
+            SelectableCardGrid(options: vm.lastSmokedOptions, selection: $vm.lastSmoked)
+        }
     }
 
     // ─── Alcohol detail (conditional) ─────────────────────────────────────────
@@ -439,8 +471,10 @@ struct SignupView: View {
                             selection: $vm.familyHistory,
                             otherText: $vm.familyHistoryOther)
 
-        sectionHeader("Who in your family?")
-        MultiSelectCardGrid(options: vm.familyRelativeOptions, selection: $vm.familyHistoryRelatives)
+        reveal(answered(vm.familyHistory)) {
+            sectionHeader("Who in your family?")
+            MultiSelectCardGrid(options: vm.familyRelativeOptions, selection: $vm.familyHistoryRelatives)
+        }
     }
 
     // ─── Allergies ────────────────────────────────────────────────────────────
@@ -479,10 +513,12 @@ struct SignupView: View {
                             selection: $vm.medicalConditions,
                             otherText: $vm.medicalConditionsOther)
 
-        sectionHeader("Do you take any regular medications?")
-        MultiSelectCardGrid(options: vm.medicationOptions,
-                            selection: $vm.medicationCategories,
-                            otherText: $vm.medicationOther)
+        reveal(answered(vm.medicalConditions)) {
+            sectionHeader("Do you take any regular medications?")
+            MultiSelectCardGrid(options: vm.medicationOptions,
+                                selection: $vm.medicationCategories,
+                                otherText: $vm.medicationOther)
+        }
     }
 
     // ─── Condition detail (conditional) ───────────────────────────────────────
@@ -496,12 +532,14 @@ struct SignupView: View {
             .init("10+ years",  title: "10+ years")
         ], selection: $vm.conditionsDiagnosed)
 
-        sectionHeader("On medication for it?")
-        SelectableCardGrid(options: [
-            .init("Yes",  title: "Yes"),
-            .init("Some", title: "Some"),
-            .init("No",   title: "No")
-        ], selection: $vm.conditionsMedicated, columns: 3)
+        reveal(answered(vm.conditionsDiagnosed)) {
+            sectionHeader("On medication for it?")
+            SelectableCardGrid(options: [
+                .init("Yes",  title: "Yes"),
+                .init("Some", title: "Some"),
+                .init("No",   title: "No")
+            ], selection: $vm.conditionsMedicated, columns: 3)
+        }
     }
 
     // ─── Ancestry ─────────────────────────────────────────────────────────────
@@ -559,6 +597,7 @@ struct SignupView: View {
     @ViewBuilder private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Theme.brandTeal)   // questions in blue/teal
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, Theme.Spacing.xs)
     }
@@ -571,8 +610,8 @@ struct SignupView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.brandTeal)   // field labels in blue/teal
             HStack {
                 Text(value).font(.subheadline)
                 Spacer()
@@ -590,9 +629,10 @@ struct SignupView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.brandTeal)   // field labels in blue/teal
             content()
+                .frame(maxWidth: .infinity, alignment: .leading)   // whole row is the tap target → focuses on touch
                 .padding(Theme.Spacing.m)
                 .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
         }
@@ -605,8 +645,8 @@ struct SignupView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.brandTeal)   // field labels in blue/teal
             HStack {
                 content()
                     .tint(Theme.brandTeal)

@@ -7,6 +7,7 @@ struct LoginView: View {
     // Drives the continuous logo spin. Reuses the BrandedLoaderView motif — Android spins
     // the logo during login; a continuous spin matches the app's logo-spin motif.
     @State private var spinning = false
+    @FocusState private var focused: Bool
 
     var body: some View {
         ScrollView {
@@ -21,6 +22,14 @@ struct LoginView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .toolbar(.hidden, for: .navigationBar)
+        // A "Done" key above the keyboard — the login screen doesn't scroll, so interactive
+        // swipe-to-dismiss had nothing to grab; this always lets the user drop the keyboard.
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focused = false }
+            }
+        }
         .navigationDestination(isPresented: $goToSignup) {
             SignupView()
         }
@@ -70,10 +79,14 @@ struct LoginView: View {
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .focused($focused)
+                            .frame(maxWidth: .infinity, alignment: .leading)   // tap anywhere in the row focuses
                             .padding(Theme.Spacing.m)
                         Divider()
                         SecureField("Password", text: $vm.password)
                             .textContentType(.password)
+                            .focused($focused)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(Theme.Spacing.m)
                     }
                     .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
@@ -110,10 +123,12 @@ struct LoginView: View {
                             Text("Log in")
                         }
                     }
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
+                    .frame(height: 50)
                 }
                 .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: Theme.CornerRadius.button))
                 .tint(Theme.brandTeal)
                 // Enabled even when fields are empty so tapping surfaces the
                 // "Email is required" / "Password is required" messages (mirrors Android).
