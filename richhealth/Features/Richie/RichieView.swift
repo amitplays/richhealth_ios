@@ -16,12 +16,7 @@ struct RichieView: View {
                     messageListView
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                // `.bar` backing so chat content can't read through the translucent input pill,
-                // and the inset reserves the bar's height so the last message sits ABOVE it (not under).
-                ChatInputBar(vm: vm)
-                    .background(.bar)
-            }
+            .safeAreaInset(edge: .bottom) { ChatInputBar(vm: vm) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // Session title only — the spinning logo now lives above the greeting (empty state).
@@ -236,10 +231,15 @@ struct RichieView: View {
                             onExtractLogs: { await vm.extractLogsFromConversation() }
                         )
                         .id(msg.id)
+                        // Native send animation: bubbles slide up + fade in (spring driven below).
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .opacity))
                     }
 
                     if vm.isSending {
                         ThinkingIndicatorView().id("typing")
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
 
                     // Session-level limit: chat is full, start new
@@ -252,11 +252,13 @@ struct RichieView: View {
                         monthlyLimitBanner.id("limitBanner")
                     }
 
-                    Color.clear.frame(height: Theme.Spacing.s).id("bottom")
+                    Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(.horizontal, Theme.Spacing.m)
-                .padding(.top, Theme.Spacing.s)
-                .padding(.bottom, Theme.Spacing.m)   // clearance so the last bubble clears the input bar
+                .padding(.vertical, Theme.Spacing.s)
+                // Native spring so inserted bubbles / the thinking indicator animate in smoothly.
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: vm.messages.count)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.isSending)
             }
             .scrollDismissesKeyboard(.immediately)
             .onChange(of: vm.messages.count) { _, _ in
@@ -411,6 +413,7 @@ struct RichieView: View {
                             vm.input.trimmingCharacters(in: .whitespaces).isEmpty || blocked
                                 ? Color.secondary : Theme.brandTeal
                         )
+                        .symbolEffect(.bounce, value: vm.isSending)   // native send bounce
                 }
                 .disabled(vm.input.trimmingCharacters(in: .whitespaces).isEmpty || vm.isSending || blocked)
             }
