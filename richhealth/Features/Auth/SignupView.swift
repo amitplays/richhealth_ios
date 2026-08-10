@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Multi-step signup: Account → Personal → Physical → Goals → Lifestyle & Health → OTP.
-/// Card-based layout matches Android OnboardingActivity (MaterialCardView + styled inputs).
-/// 5-step form collects all key onboarding data; OTP step uses Form.
+/// Multi-step signup mirroring Android's OnboardingActivity (up to 21 conditional steps).
+/// Card-based layout: step bars + circular icon header + GlassCard with styled fields.
+/// The active step list is dynamic (see SignupViewModel.activeSteps); the final step
+/// submits the account, then an OTP step verifies the email.
 struct SignupView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var vm = SignupViewModel()
@@ -15,12 +16,8 @@ struct SignupView: View {
                 formStepsView
             }
         }
-        .navigationTitle(vm.isAccountCreated ? "Verify email" : stepTitle)
+        .navigationTitle(vm.isAccountCreated ? "Verify email" : vm.currentStep.title)
         .navigationBarBackButtonHidden(vm.isAccountCreated)
-    }
-
-    private var stepTitle: String {
-        ["Your account", "Personal info", "Your body", "Goals & diet", "Lifestyle"][safe: vm.step] ?? "Create account"
     }
 
     // ─── OTP Step ─────────────────────────────────────────────────────────────
@@ -89,7 +86,6 @@ struct SignupView: View {
     }
 
     // ─── Multi-step card form ─────────────────────────────────────────────────
-    // Mirrors Android layout: step bars + circle icon header + GlassCard with styled fields.
 
     private var formStepsView: some View {
         ScrollView {
@@ -98,14 +94,8 @@ struct SignupView: View {
                 stepHeaderIcon
 
                 GlassCard {
-                    VStack(spacing: Theme.Spacing.m) {
-                        switch vm.step {
-                        case 0: stepAccountContent
-                        case 1: stepPersonalContent
-                        case 2: stepPhysicalContent
-                        case 3: stepGoalsContent
-                        default: stepLifestyleContent
-                        }
+                    VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                        stepContent
                     }
                 }
                 .padding(.horizontal, Theme.Spacing.m)
@@ -118,52 +108,85 @@ struct SignupView: View {
                         .padding(.horizontal, Theme.Spacing.m)
                 }
 
-                VStack(spacing: Theme.Spacing.s) {
-                    if vm.step == SignupViewModel.totalSteps - 1 {
-                        Button {
-                            Task { await vm.submit(auth: appEnv.auth) }
-                        } label: {
-                            Group {
-                                if vm.isLoading {
-                                    HStack(spacing: Theme.Spacing.s) {
-                                        ProgressView().tint(.white) // contrast on teal button
-                                        Text("Creating account…")
-                                    }
-                                } else {
-                                    Text("Create account")
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.brandTeal)
-                        .disabled(vm.isLoading)
-                    } else {
-                        Button {
-                            vm.next()
-                        } label: {
-                            Text("Continue")
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 52)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.brandTeal)
-                    }
-
-                    if vm.step > 0 {
-                        Button("Back") { vm.back() }
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.horizontal, Theme.Spacing.m)
-                .padding(.bottom, Theme.Spacing.xl)
+                navigationButtons
+                    .padding(.horizontal, Theme.Spacing.m)
+                    .padding(.bottom, Theme.Spacing.xl)
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .id(vm.stepIndex) // reset scroll position between steps
     }
 
-    // ─── Step 0: Account ─────────────────────────────────────────────────────
+    private var navigationButtons: some View {
+        VStack(spacing: Theme.Spacing.s) {
+            if vm.isLastStep {
+                Button {
+                    Task { await vm.submit(auth: appEnv.auth) }
+                } label: {
+                    Group {
+                        if vm.isLoading {
+                            HStack(spacing: Theme.Spacing.s) {
+                                ProgressView().tint(.white) // contrast on teal button
+                                Text("Creating account…")
+                            }
+                        } else {
+                            Text("Create account")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.brandTeal)
+                .disabled(vm.isLoading)
+            } else {
+                Button {
+                    vm.next()
+                } label: {
+                    Text("Continue")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.brandTeal)
+            }
+
+            if vm.stepIndex > 0 {
+                Button("Back") { vm.back() }
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // ─── Step content router ──────────────────────────────────────────────────
+
+    @ViewBuilder private var stepContent: some View {
+        switch vm.currentStep {
+        case .account:         stepAccountContent
+        case .personal:        stepPersonalContent
+        case .menstrual:       stepMenstrualContent
+        case .body:            stepBodyContent
+        case .goal:            stepGoalContent
+        case .activity:        stepActivityContent
+        case .occupation:      stepOccupationContent
+        case .diet:            stepDietContent
+        case .mealsWater:      stepMealsWaterContent
+        case .sleep:           stepSleepContent
+        case .stress:          stepStressContent
+        case .screenTime:      stepScreenTimeContent
+        case .habits:          stepHabitsContent
+        case .smokingDetail:   stepSmokingDetailContent
+        case .alcoholDetail:   stepAlcoholDetailContent
+        case .familyHistory:   stepFamilyHistoryContent
+        case .allergies:       stepAllergiesContent
+        case .sunExposure:     stepSunExposureContent
+        case .medical:         stepMedicalContent
+        case .conditionDetail: stepConditionDetailContent
+        case .ancestry:        stepAncestryContent
+        }
+    }
+
+    // ─── Account ──────────────────────────────────────────────────────────────
 
     @ViewBuilder private var stepAccountContent: some View {
         brandedField("Full name") {
@@ -193,7 +216,7 @@ struct SignupView: View {
         }
     }
 
-    // ─── Step 1: Personal ────────────────────────────────────────────────────
+    // ─── Personal ─────────────────────────────────────────────────────────────
 
     @ViewBuilder private var stepPersonalContent: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
@@ -233,57 +256,86 @@ struct SignupView: View {
         }
     }
 
-    // ─── Step 2: Physical ────────────────────────────────────────────────────
+    // ─── Menstrual (conditional) ──────────────────────────────────────────────
 
-    @ViewBuilder private var stepPhysicalContent: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text("Height")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack {
-                Text("\(Int(vm.heightCm)) cm")
-                    .font(.subheadline)
-                Spacer()
-                Stepper("", value: $vm.heightCm, in: 100...250, step: 1)
-                    .labelsHidden()
-            }
-            .padding(Theme.Spacing.m)
-            .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
+    @ViewBuilder private var stepMenstrualContent: some View {
+        Text("This helps us personalise nutrition and insights around your cycle. All optional.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        sectionHeader("What's your cycle like?")
+        SelectableCardGrid(options: vm.menstrualStatusOptions, selection: $vm.menstrualStatus)
+
+        sectionHeader("Any common symptoms?")
+        MultiSelectCardGrid(options: vm.menstrualSymptomOptions, selection: $vm.menstrualSymptoms)
+
+        sectionHeader("Pregnancy status")
+        SelectableCardGrid(options: vm.pregnancyOptions, selection: $vm.pregnancyStatus)
+
+        sectionHeader("Average cycle length?")
+        SelectableCardGrid(options: vm.cycleLengthOptions, selection: $vm.cycleLengthSel)
+
+        sectionHeader("Typical period length?")
+        SelectableCardGrid(options: vm.periodLengthOptions, selection: $vm.periodLengthSel)
+
+        sectionHeader("Contraception method?")
+        SelectableCardGrid(options: vm.contraceptionOptions,
+                           selection: $vm.contraceptionMethod,
+                           otherText: $vm.contraceptionOther)
+    }
+
+    // ─── Body ─────────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepBodyContent: some View {
+        stepperRow(title: "Height",
+                   value: "\(Int(vm.heightCm)) cm") {
+            Stepper("", value: $vm.heightCm, in: 100...250, step: 1).labelsHidden()
+        }
+
+        stepperRow(title: "Weight",
+                   value: String(format: "%.1f kg", vm.weightKg)) {
+            Stepper("", value: $vm.weightKg, in: 30...250, step: 0.5).labelsHidden()
         }
 
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text("Weight")
+            Text("Waist circumference (optional)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack {
-                Text(String(format: "%.1f kg", vm.weightKg))
+                Text(vm.waistUnknown ? "—" : "\(Int(vm.waistCircumferenceCm)) cm")
                     .font(.subheadline)
                 Spacer()
-                Stepper("", value: $vm.weightKg, in: 30...250, step: 0.5)
+                Stepper("", value: $vm.waistCircumferenceCm, in: 40...200, step: 1)
                     .labelsHidden()
+                    .disabled(vm.waistUnknown)
+                    .onChange(of: vm.waistCircumferenceCm) { _, _ in
+                        // Interacting means the user does know their waist.
+                        if vm.waistUnknown { vm.waistUnknown = false }
+                    }
             }
             .padding(Theme.Spacing.m)
             .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
-        }
-
-        pickerField("Blood type (optional)") {
-            Picker("Blood type", selection: $vm.bloodType) {
-                Text("Don't know / skip").tag("")
-                ForEach(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"], id: \.self) {
-                    Text($0).tag($0)
-                }
-            }
+            Toggle("I don't know", isOn: $vm.waistUnknown)
+                .font(.subheadline)
+                .tint(Theme.brandTeal)
         }
     }
 
-    // ─── Step 3: Goals & Diet ────────────────────────────────────────────────
+    // ─── Goal ─────────────────────────────────────────────────────────────────
 
-    @ViewBuilder private var stepGoalsContent: some View {
-        pickerField("Primary health goal") {
-            Picker("Goal", selection: $vm.primaryGoal) {
-                ForEach(vm.goalOptions, id: \.self) { Text($0).tag($0) }
-            }
-        }
+    @ViewBuilder private var stepGoalContent: some View {
+        sectionHeader("Pick what you want to focus on most")
+        SelectableCardGrid(options: vm.goalOptions,
+                           selection: $vm.primaryGoal,
+                           otherText: $vm.primaryGoalOther)
+
+        sectionHeader("Has your weight changed recently?")
+        SelectableCardGrid(options: vm.recentWeightChangeOptions, selection: $vm.recentWeightChange)
+    }
+
+    // ─── Activity ─────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepActivityContent: some View {
         pickerField("Activity level") {
             Picker("Activity level", selection: $vm.activityLevel) {
                 ForEach(1...5, id: \.self) { level in
@@ -291,119 +343,245 @@ struct SignupView: View {
                 }
             }
         }
-        pickerField("Diet type") {
-            Picker("Diet", selection: $vm.dietType) {
-                ForEach(vm.dietOptions, id: \.self) { Text($0).tag($0) }
-            }
+    }
+
+    // ─── Occupation ───────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepOccupationContent: some View {
+        SelectableCardGrid(options: vm.occupationOptions,
+                           selection: $vm.occupationType,
+                           otherText: $vm.occupationOther)
+    }
+
+    // ─── Diet ─────────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepDietContent: some View {
+        SelectableCardGrid(options: vm.dietOptions,
+                           selection: $vm.dietType,
+                           otherText: $vm.dietTypeOther)
+    }
+
+    // ─── Meals + Water ────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepMealsWaterContent: some View {
+        sectionHeader("How many meals a day?")
+        SelectableCardGrid(options: vm.mealsOptions, selection: $vm.mealsPerDaySel)
+
+        sectionHeader("How much water do you drink?")
+        SelectableCardGrid(options: vm.waterOptions, selection: $vm.waterIntakeSel)
+    }
+
+    // ─── Sleep ────────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepSleepContent: some View {
+        stepperRow(title: "Average sleep hours",
+                   value: String(format: "%.1f hrs", vm.sleepHours)) {
+            Stepper("", value: $vm.sleepHours, in: 3...12, step: 0.5).labelsHidden()
         }
     }
 
-    // ─── Step 4: Lifestyle & Health ──────────────────────────────────────────
-    // Mirrors Android OnboardingActivity steps 7-15: sleep, smoking, alcohol, caffeine,
-    // medical conditions, allergies.
+    // ─── Stress ───────────────────────────────────────────────────────────────
 
-    @ViewBuilder private var stepLifestyleContent: some View {
-        Text("These are all optional — skip any you prefer not to share.")
+    @ViewBuilder private var stepStressContent: some View {
+        SelectableCardGrid(options: vm.stressOptions, selection: $vm.stressSel)
+    }
+
+    // ─── Screen time ──────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepScreenTimeContent: some View {
+        SelectableCardGrid(options: vm.screenTimeOptions, selection: $vm.screenTimeBeforeBed, columns: 1)
+    }
+
+    // ─── Habits ───────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepHabitsContent: some View {
+        Text("Honest answers help us give you genuinely better health advice.")
             .font(.caption)
             .foregroundStyle(.secondary)
 
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text("Average sleep hours")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack {
-                Text(String(format: "%.1f hrs", vm.sleepHours))
-                    .font(.subheadline)
-                Spacer()
-                Stepper("", value: $vm.sleepHours, in: 3...12, step: 0.5)
-                    .labelsHidden()
-            }
-            .padding(Theme.Spacing.m)
-            .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
-        }
+        sectionHeader("Do you smoke?")
+        SelectableCardGrid(options: vm.smokingOptions, selection: $vm.smokingStatus, columns: 1)
 
-        pickerField("Smoking") {
-            Picker("Smoking", selection: $vm.smokingStatus) {
-                Text("Never").tag("never")
-                Text("I quit").tag("ex")
-                Text("Only socially").tag("social")
-                Text("Sometimes").tag("occasional")
-                Text("Daily habit").tag("regular")
-            }
-        }
+        sectionHeader("How often do you drink alcohol?")
+        SelectableCardGrid(options: vm.alcoholOptions, selection: $vm.alcoholConsumption, columns: 1)
 
-        pickerField("Alcohol") {
-            Picker("Alcohol", selection: $vm.alcoholConsumption) {
-                Text("None").tag("None")
-                Text("Rarely").tag("Rarely")
-                Text("Special occasions").tag("Special Occasions")
-                Text("Socially").tag("Socially")
-                Text("Regularly").tag("Regularly")
-                Text("Frequently").tag("Frequently")
-            }
-        }
-
-        pickerField("Caffeine") {
-            Picker("Caffeine", selection: $vm.caffeineHabit) {
-                Text("No caffeine").tag("none")
-                Text("Tea").tag("tea")
-                Text("Coffee").tag("coffee")
-                Text("Energy drinks").tag("energy_drinks")
-            }
-        }
-
-        brandedField("Medical conditions (optional)") {
-            TextField("E.g. Diabetes, Hypertension", text: $vm.medicalConditions, axis: .vertical)
-                .lineLimit(1...3)
-        }
-
-        brandedField("Allergies (optional)") {
-            TextField("E.g. Peanuts, Dairy, Gluten", text: $vm.allergies, axis: .vertical)
-                .lineLimit(1...3)
-        }
+        sectionHeader("What's your daily fuel?")
+        SelectableCardGrid(options: vm.caffeineOptions,
+                           selection: $vm.caffeineHabit,
+                           otherText: $vm.caffeineOther)
     }
 
-    // ── Step progress bars ────────────────────────────────────────────────────
+    // ─── Smoking detail (conditional) ─────────────────────────────────────────
+
+    @ViewBuilder private var stepSmokingDetailContent: some View {
+        sectionHeader("How long have you smoked?")
+        SelectableCardGrid(options: vm.smokingDurationOptions, selection: $vm.smokingDuration)
+
+        sectionHeader("How many a day?")
+        SelectableCardGrid(options: vm.cigarettesPerDayOptions, selection: $vm.cigarettesPerDay)
+
+        sectionHeader("When did you last smoke?")
+        SelectableCardGrid(options: vm.lastSmokedOptions, selection: $vm.lastSmoked)
+    }
+
+    // ─── Alcohol detail (conditional) ─────────────────────────────────────────
+
+    @ViewBuilder private var stepAlcoholDetailContent: some View {
+        sectionHeader("Drinks per week?")
+        SelectableCardGrid(options: vm.drinksPerWeekOptions, selection: $vm.drinksPerWeek)
+    }
+
+    // ─── Family history ───────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepFamilyHistoryContent: some View {
+        sectionHeader("Has anyone in your family had…")
+        MultiSelectCardGrid(options: vm.familyHistoryOptions,
+                            selection: $vm.familyHistory,
+                            otherText: $vm.familyHistoryOther)
+
+        sectionHeader("Who in your family?")
+        MultiSelectCardGrid(options: vm.familyRelativeOptions, selection: $vm.familyHistoryRelatives)
+    }
+
+    // ─── Allergies ────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepAllergiesContent: some View {
+        Text("Safety-critical — we'll cross-reference these with food checks and medication advice.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        MultiSelectCardGrid(options: vm.allergyOptions,
+                            selection: $vm.allergies,
+                            otherText: $vm.allergiesOther)
+    }
+
+    // ─── Sun exposure ─────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepSunExposureContent: some View {
+        SelectableCardGrid(options: vm.sunExposureOptions, selection: $vm.sunExposure, columns: 1)
+    }
+
+    // ─── Medical ──────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepMedicalContent: some View {
+        Text("Optional — skip any section you prefer not to share.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        pickerField("Blood type (optional)") {
+            Picker("Blood type", selection: $vm.bloodType) {
+                Text("Don't know / skip").tag("")
+                ForEach(vm.bloodTypeOptions, id: \.self) { Text($0).tag($0) }
+            }
+        }
+
+        sectionHeader("Any medical conditions?")
+        MultiSelectCardGrid(options: vm.conditionOptions,
+                            selection: $vm.medicalConditions,
+                            otherText: $vm.medicalConditionsOther)
+
+        sectionHeader("Do you take any regular medications?")
+        MultiSelectCardGrid(options: vm.medicationOptions,
+                            selection: $vm.medicationCategories,
+                            otherText: $vm.medicationOther)
+    }
+
+    // ─── Condition detail (conditional) ───────────────────────────────────────
+
+    @ViewBuilder private var stepConditionDetailContent: some View {
+        sectionHeader("When were you first diagnosed?")
+        SelectableCardGrid(options: [
+            .init("<1 year",    title: "Under a year"),
+            .init("1-5 years",  title: "1–5 years"),
+            .init("5-10 years", title: "5–10 years"),
+            .init("10+ years",  title: "10+ years")
+        ], selection: $vm.conditionsDiagnosed)
+
+        sectionHeader("On medication for it?")
+        SelectableCardGrid(options: [
+            .init("Yes",  title: "Yes"),
+            .init("Some", title: "Some"),
+            .init("No",   title: "No")
+        ], selection: $vm.conditionsMedicated, columns: 3)
+    }
+
+    // ─── Ancestry ─────────────────────────────────────────────────────────────
+
+    @ViewBuilder private var stepAncestryContent: some View {
+        Text("Risk for some conditions varies by ancestry — this sharpens our predictions.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        SelectableCardGrid(options: vm.ethnicityOptions, selection: $vm.ethnicity)
+    }
+
+    // ─── Step progress bars ────────────────────────────────────────────────────
 
     private var stepBars: some View {
         HStack(spacing: Theme.Spacing.xs) {
-            ForEach(0..<SignupViewModel.totalSteps, id: \.self) { i in
+            ForEach(Array(0..<max(vm.totalSteps, 1)), id: \.self) { i in
                 Capsule()
-                    .fill(i <= vm.step ? Theme.brandTeal : Color.secondary.opacity(0.25))
+                    .fill(i <= vm.stepIndex ? Theme.brandTeal : Color.secondary.opacity(0.25))
                     .frame(height: 4)
-                    .animation(.easeInOut(duration: 0.2), value: vm.step)
+                    .animation(.easeInOut(duration: 0.2), value: vm.stepIndex)
             }
         }
         .padding(.horizontal, Theme.Spacing.m)
         .padding(.top, Theme.Spacing.m)
     }
 
-    // ── Step icon header ──────────────────────────────────────────────────────
-    // Circular step icon + caption — mirrors Android's 80dp circular MaterialCardView icons.
+    // ─── Step icon header ──────────────────────────────────────────────────────
+    // Circular step icon + caption — driven by the current dynamic step.
 
     private var stepHeaderIcon: some View {
-        let icons    = ["person.badge.key.fill", "person.fill", "figure.stand",
-                        "target", "heart.text.clipboard"]
-        let captions = ["Secure your account", "Tell us about yourself",
-                        "Your body metrics", "Goals & diet", "Lifestyle & health"]
-        return VStack(spacing: Theme.Spacing.s) {
+        VStack(spacing: Theme.Spacing.s) {
             ZStack {
                 Circle()
                     .fill(Theme.brandTeal.opacity(0.12))
                     .frame(width: 64, height: 64)
-                Image(systemName: icons[safe: vm.step] ?? "person.fill")
+                Image(systemName: vm.currentStep.systemImage)
                     .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(Theme.brandTeal)
             }
-            Text(captions[safe: vm.step] ?? "")
+            Text("Step \(vm.stepIndex + 1) of \(vm.totalSteps)")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Theme.brandTeal)
+            Text(vm.currentStep.caption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .padding(.vertical, Theme.Spacing.m)
         .frame(maxWidth: .infinity)
     }
 
-    // ── Branded field helpers ─────────────────────────────────────────────────
+    // ─── Reusable field helpers ────────────────────────────────────────────────
+
+    /// Sub-section title inside a multi-question step card.
+    @ViewBuilder private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, Theme.Spacing.xs)
+    }
+
+    /// A labelled value row with a trailing stepper — used for height/weight/waist/sleep.
+    @ViewBuilder private func stepperRow<Control: View>(
+        title: String,
+        value: String,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Text(value).font(.subheadline)
+                Spacer()
+                control()
+            }
+            .padding(Theme.Spacing.m)
+            .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
+        }
+    }
 
     // Plain label + filled background, no material/blur — fast native iOS field appearance.
     @ViewBuilder private func brandedField<Content: View>(
@@ -438,12 +616,6 @@ struct SignupView: View {
             .padding(Theme.Spacing.m)
             .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
 

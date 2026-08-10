@@ -18,30 +18,83 @@ struct AuthResponse: Decodable {
 
 /// Body for POST /api/auth/signup.
 /// Required fields confirmed in authController.js signup().
-/// Optional fields from OnboardingActivity.java 21-step onboarding flow.
+/// Full field set + JSON keys mirror Android OnboardingActivity.buildPayload() (21-step flow).
+/// NOTE: the compiler-synthesised `Encodable` emits `encodeIfPresent` for optionals, so nil
+/// optionals are omitted from the JSON body (matching Android's conditional puts), while the
+/// non-optional fields below are always sent (matching Android's unconditional puts).
 struct SignupRequest: Encodable {
-    // Required
+    // ── Account ──
     let email: String
     let password: String
     let confirmPassword: String
     let name: String
+    let phoneNumber: String?
+
+    // ── Personal ──
     let gender: String              // "Male" | "Female" | "Other"
     let dateOfBirth: String         // "yyyy-MM-dd"
+    let location: String?
+    let ethnicity: String?          // ancestry — risk stratifier
+
+    // ── Body ──
     let height: Double              // cm
     let weight: Double              // kg
-    let activityLevel: Int          // 1–5
-    let dietType: String
-    // Optional — from extended onboarding
-    let phoneNumber: String?
-    let location: String?
+    let waistCircumference: Double? // cm — omitted when unknown/skipped
+
+    // ── Goal + activity + occupation ──
     let primaryGoal: String?
-    let bloodType: String?
+    let recentWeightChange: String? // "Gained"|"Lost"|"Stable"|"Not sure"
+    let activityLevel: Int          // 1–5
+    let occupationType: String?     // "desk"|"physical"|"healthcare"|"student"|"remote"|"retired"|<other>
+
+    // ── Diet + intake ──
+    let dietType: String
+    let mealsPerDay: Int
+    let waterIntake: Int            // glasses/day
+
+    // ── Sleep + stress + screens ──
     let sleepHours: Double?
-    let smokingStatus: String?      // "never"|"ex"|"social"|"occasional"|"regular"
-    let alcoholConsumption: String? // "None"|"Rarely"|"Special Occasions"|"Socially"|"Regularly"|"Frequently"
-    let caffeineHabit: String?      // "none"|"tea"|"coffee"|"both"|"energy_drinks"
-    let medicalConditions: [String]?
-    let allergies: [String]?
+    let stressLevel: Int            // 1–4
+    let screenTimeBeforeBed: String // "low"|"moderate"|"high"|"very_high"
+    let sunExposure: String         // "low"|"moderate"|"high"
+
+    // ── Habits ──
+    let smoker: Bool
+    let smokingLevel: Int           // 0–3 (derived)
+    let smokingFrequency: String    // "Non-smoker"|"Social"|"Occasional"|"Regular"
+    let smokingStatus: String       // "never"|"ex"|"social"|"occasional"|"regular"
+    let alcoholConsumption: String  // "None"|"Special Occasions"|"Socially"|"Regularly"|"Frequently"
+    let alcoholLevel: Int           // 0–4 (derived)
+    let caffeineHabit: String       // "none"|"tea"|"coffee"|"energy_drinks"|<other>
+
+    // ── Habit / condition follow-ups (conditional) ──
+    let smokingDuration: String?
+    let cigarettesPerDay: String?
+    let lastSmoked: String?
+    let drinksPerWeek: String?
+    let conditionsDiagnosed: String?
+    let conditionsMedicated: String?
+
+    // ── Family history ──
+    let familyHistory: [String]
+    let familyHistoryRelatives: [String]
+
+    // ── Allergies + medical ──
+    let allergies: [String]
+    let medicalConditions: [String]
+    let medicationCategories: [String]
+
+    // ── Menstrual health (only when applicable) ──
+    let menstrualStatus: String?
+    let averageCycleLength: Int?
+    let averagePeriodLength: Int?
+    let menstrualSymptoms: [String]?
+    let contraceptionMethod: String?
+    let pregnancyStatus: String?
+
+    // ── Misc ──
+    let bloodType: String?
+    let weeklyGoal: Double
 }
 
 // ── Profile wrapper ───────────────────────────────────────────────────────────

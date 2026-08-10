@@ -151,6 +151,11 @@ final class RichieViewModel {
                 messages[idx] = response.userMessage.toLocal()
             }
             var aiMessage = response.aiMessage.toLocal()
+            // Show the "Remembered" badge on this fresh reply when the backend saved memories this turn.
+            // Prefer the memoriesAdded list; fall back to the response bool or the DTO value.
+            let remembered = !(response.memoriesAdded?.isEmpty ?? true)
+                || (response.memorySaved ?? false)
+            aiMessage.memorySaved = aiMessage.memorySaved || remembered
             // Attach quick-log cards (Android dataCards) to the AI reply — ephemeral, not persisted.
             let cards = response.dataCards ?? []
             aiMessage.cards = cards
@@ -269,6 +274,44 @@ final class RichieViewModel {
             messages.append(ChatMessage(id: UUID().uuidString, text: text, kind: .log,
                                         reasoning: nil, isSaved: false, memorySaved: false))
         }
+    }
+
+    // ── Extract logs from the conversation ──────────────────────────────────────
+
+    /// User-initiated: scan the current chat, create the health records mentioned, then append a
+    /// .log confirmation summarizing what was logged + remembered. Never auto-fired (avoids surprise
+    /// logging). Reuses the .log append pattern via logCardConfirmation.
+    func extractLogsFromConversation() async {
+        guard let sessionId = currentSession?.id else { return }
+        do {
+            let resp = try await service.extractLogs(sessionId: sessionId)
+            await logCardConfirmation(Self.extractLogsSummary(resp))
+        } catch {
+            errorMessage = (error as? APIError)?.userMessage ?? "Couldn't log from this conversation."
+        }
+    }
+
+    /// Build a one-line confirmation from the extract-logs result (e.g. "Logged 2 symptoms,
+    /// 1 medication · remembered 3 details"). Empty result → a gentle "nothing new" note.
+    private static func extractLogsSummary(_ resp: ExtractLogsResponse) -> String {
+        func phrase(_ count: Int, _ singular: String, _ plural: String) -> String? {
+            count > 0 ? "\(count) \(count == 1 ? singular : plural)" : nil
+        }
+        let created = resp.created
+        let logged = [
+            phrase(created?.symptoms?.count ?? 0, "symptom", "symptoms"),
+            phrase(created?.measurements?.count ?? 0, "measurement", "measurements"),
+            phrase(created?.medications?.count ?? 0, "medication", "medications"),
+            phrase(created?.periods?.count ?? 0, "period", "periods"),
+        ].compactMap { $0 }
+
+        var parts: [String] = []
+        if !logged.isEmpty { parts.append("Logged " + logged.joined(separator: ", ")) }
+        let remembered = resp.memoriesAdded?.count ?? 0
+        if remembered > 0 { parts.append("remembered \(remembered) \(remembered == 1 ? "detail" : "details")") }
+
+        if parts.isEmpty { return "Nothing new to log from this conversation." }
+        return parts.joined(separator: " · ")
     }
 
     private func handleCardError(_ error: Error, card: HealthCardVM) {

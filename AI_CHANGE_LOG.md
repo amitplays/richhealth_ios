@@ -2,6 +2,26 @@
 
 ---
 
+## [2026-08-10] Richie chat polish + full signup parity + logging/memory (main branch)
+
+Cross-platform pass (iOS + Android + backend). iOS work:
+
+**Chat (Features/Richie)**
+- **Copy**: long-press (context menu) now offers Copy on user, AI and log messages (`UIPasteboard`, raw text) — matches Android.
+- **"Thought process"**: replaced the `DisclosureGroup` with a custom expander — a LEADING rotating chevron + "Thought process" label (was "Thinking" with a trailing chevron + brain icon). Aligned with Android.
+- **Formatting**: new `DesignSystem/Components/ChatMarkdownText.swift` renders headings, bullet/numbered lists, bold/italic/strikethrough, and reflows markdown tables to key:value — mirrors Android's `TextFormatter` (iOS previously rendered inline-only markdown). Wired into AI messages.
+- **Logo**: the app logo now also spins in the "thinking" indicator while a reply loads (empty-state spin kept).
+- **Memory indicator**: `SendMessageResponse` decodes `memoriesAdded` (objects with `fact`) so the "Remembered" badge shows on fresh replies, not only after reload.
+- **Extract-logs**: new `ChatService.extractLogs` + `RichieViewModel.extractLogsFromConversation()`, triggered by a "Log & remember from here" context-menu action, calling the new backend endpoint and appending a confirmation.
+
+**Auth (Features/Auth)**
+- **Login**: rotating logo; added email-format validation and distinct timeout/offline/401/server error messages (ported from Android).
+- **Signup — full parity with Android onboarding**: new reusable `DesignSystem/Components/SelectableCardGrid.swift` (single/multi-select cards + "Other" free-text + mutually-exclusive "None"); added ~24 missing fields incl. the gender-conditional Menstrual section, conditional smoking/alcohol/condition-detail steps, family history, medication categories, ethnicity, and lifestyle fields; allergies/conditions converted from free-text to multi-select; dynamic conditional steps (was fixed 5). `SignupRequest`/`UserProfile` extended to match the Android payload keys.
+
+**Backend (../richhealthbackend)** — root-cause dedup so the card extractor stops re-suggesting already-logged items; new `POST /api/chat/sessions/:id/extract-logs` (last 2 messages → create logs + memory, with dedup, reusing `storeMemory`/`markHealthDataUpdate`).
+
+Verified by independent no-context audit agents (compile-risk + backend↔client contract); fixed a `memoriesAdded` decode mismatch before commit.
+
 ## [2026-08-09] Services cards — follow-up polish (owner review of the rendered build)
 
 - **Removed the meta Divider** from `StandardCard` (Android has none) — cards are cleaner.

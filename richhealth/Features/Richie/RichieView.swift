@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit   // UIPasteboard — long-press "Copy" on chat bubbles
 
 struct RichieView: View {
     @Environment(AppEnvironment.self) private var appEnv
@@ -226,7 +227,8 @@ struct RichieView: View {
                             fontSize: vm.chatFontSize,
                             cards: vm.cardVMs[msg.id] ?? [],
                             onToggleSaved: { await vm.toggleSaved(message: msg) },
-                            onAddCard: { card in await vm.addCard(card) }
+                            onAddCard: { card in await vm.addCard(card) },
+                            onExtractLogs: { await vm.extractLogsFromConversation() }
                         )
                         .id(msg.id)
                     }
@@ -485,6 +487,7 @@ private struct ChatBubbleView: View {
     let cards: [HealthCardVM]
     let onToggleSaved: () async -> Void
     let onAddCard: (HealthCardVM) async -> Void
+    let onExtractLogs: () async -> Void
     @State private var showReasoning = false
 
     var body: some View {
@@ -503,6 +506,11 @@ private struct ChatBubbleView: View {
                 .padding(.horizontal, Theme.Spacing.m).padding(.vertical, Theme.Spacing.s)
                 .background(Theme.brandTeal, in: RoundedRectangle(cornerRadius: Theme.CornerRadius.card))
                 .foregroundStyle(.white) // white text on teal for contrast
+                .contextMenu {
+                    Button("Copy", systemImage: "doc.on.doc") {
+                        UIPasteboard.general.string = message.text
+                    }
+                }
         }
     }
 
@@ -510,26 +518,44 @@ private struct ChatBubbleView: View {
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 // Thinking trace — ABOVE the message (matches Android item_chat_ai.xml order), collapsed by default.
+                // Custom expander: LEADING chevron that rotates 0°→90° on expand (no trailing chevron/brain icon).
                 if let reasoning = message.reasoning {
-                    DisclosureGroup(isExpanded: $showReasoning) {
-                        Text(reasoning)
-                            .font(.caption).foregroundStyle(.secondary)
-                            .padding(.top, Theme.Spacing.xs)
-                    } label: {
-                        Label("Thinking", systemImage: "brain")
-                            .font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        Button {
+                            withAnimation(.easeInOut) { showReasoning.toggle() }
+                        } label: {
+                            HStack(spacing: Theme.Spacing.xs) {
+                                Image(systemName: "chevron.right")
+                                    .rotationEffect(.degrees(showReasoning ? 90 : 0))
+                                Text("Thought process")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        if showReasoning {
+                            Text(reasoning)
+                                .font(.caption).foregroundStyle(.secondary)
+                                .padding(.top, Theme.Spacing.xs)
+                        }
                     }
                     .padding(.horizontal, Theme.Spacing.m)
                 }
 
-                markdownText(message.text)
-                    .font(.system(size: fontSize))
+                ChatMarkdownText(text: message.text, fontSize: fontSize)
                     .padding(.horizontal, Theme.Spacing.m).padding(.vertical, Theme.Spacing.s)
                     .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.card))
                     .contextMenu {
+                        Button("Copy", systemImage: "doc.on.doc") {
+                            UIPasteboard.general.string = message.text
+                        }
                         Button(message.isSaved ? "Unsave" : "Save",
                                systemImage: message.isSaved ? "bookmark.slash" : "bookmark") {
                             Task { await onToggleSaved() }
+                        }
+                        Button("Log & remember from here", systemImage: "text.badge.plus") {
+                            Task { await onExtractLogs() }
                         }
                     }
 
@@ -554,18 +580,11 @@ private struct ChatBubbleView: View {
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .padding(.vertical, Theme.Spacing.s)
-    }
-
-    @ViewBuilder
-    private func markdownText(_ raw: String) -> some View {
-        if let attributed = try? AttributedString(
-            markdown: raw,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            Text(attributed)
-        } else {
-            Text(raw)
-        }
+            .contextMenu {
+                Button("Copy", systemImage: "doc.on.doc") {
+                    UIPasteboard.general.string = message.text
+                }
+            }
     }
 }
 
@@ -581,13 +600,23 @@ private struct ThinkingIndicatorView: View {
         "Just a moment more…"
     ]
     @State private var phaseIndex = 0
+    // Drives the spinning logo (same pattern as the empty-state logo) — signals the AI is working.
+    @State private var logoSpinning = false
 
     var body: some View {
         HStack {
-            Text(phases[phaseIndex])
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .animation(.easeInOut(duration: 0.3), value: phaseIndex)
+            HStack(spacing: Theme.Spacing.s) {
+                Image("AppLogo")
+                    .resizable().scaledToFit()
+                    .frame(width: Theme.IconSize.inline, height: Theme.IconSize.inline)
+                    .rotationEffect(.degrees(logoSpinning ? 360 : 0))
+                    .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: logoSpinning)
+                    .onAppear { logoSpinning = true }
+                Text(phases[phaseIndex])
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .animation(.easeInOut(duration: 0.3), value: phaseIndex)
+            }
                 .padding(.horizontal, Theme.Spacing.m)
                 .padding(.vertical, Theme.Spacing.s)
                 .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.card))

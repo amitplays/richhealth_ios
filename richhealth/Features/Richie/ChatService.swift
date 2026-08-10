@@ -78,6 +78,16 @@ struct ChatService {
         )
     }
 
+    // POST /api/chat/sessions/:sessionId/extract-logs
+    // Scans the conversation, creates the health records the user mentioned, and reports what was
+    // created / remembered / skipped. User-initiated only (never auto-fired) to avoid surprise logging.
+    func extractLogs(sessionId: String) async throws -> ExtractLogsResponse {
+        return try await api.send(
+            Endpoint(path: "/api/chat/sessions/\(sessionId)/extract-logs", method: .post, showsLoader: false, loaderMessage: "Logging from your chat…"),
+            as: ExtractLogsResponse.self
+        )
+    }
+
     // PUT /api/chat/messages/:messageId/saved
     func toggleSaved(messageId: String) async throws {
         try await api.send(

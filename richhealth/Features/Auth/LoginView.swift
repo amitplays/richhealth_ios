@@ -4,6 +4,9 @@ struct LoginView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var vm = LoginViewModel()
     @State private var goToSignup = false
+    // Drives the continuous logo spin. Reuses the BrandedLoaderView motif — Android spins
+    // the logo during login; a continuous spin matches the app's logo-spin motif.
+    @State private var spinning = false
 
     var body: some View {
         ScrollView {
@@ -32,6 +35,10 @@ struct LoginView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 80, height: 80)
+                .rotationEffect(.degrees(spinning ? 360 : 0))
+                .animation(.linear(duration: 3).repeatForever(autoreverses: false),
+                           value: spinning)
+                .onAppear { spinning = true }
             Text("RichHealth")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(Theme.brandTeal)
@@ -56,19 +63,32 @@ struct LoginView: View {
                         .font(.footnote)
                 }
 
-                VStack(spacing: 0) {
-                    TextField("Email", text: $vm.email)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(Theme.Spacing.m)
-                    Divider()
-                    SecureField("Password", text: $vm.password)
-                        .textContentType(.password)
-                        .padding(Theme.Spacing.m)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    VStack(spacing: 0) {
+                        TextField("Email", text: $vm.email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(Theme.Spacing.m)
+                        Divider()
+                        SecureField("Password", text: $vm.password)
+                            .textContentType(.password)
+                            .padding(Theme.Spacing.m)
+                    }
+                    .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
+
+                    if let emailError = vm.emailError {
+                        Text(emailError)
+                            .foregroundStyle(.red) // field-level feedback (email)
+                            .font(.caption)
+                    }
+                    if let passwordError = vm.passwordError {
+                        Text(passwordError)
+                            .foregroundStyle(.red) // field-level feedback (password)
+                            .font(.caption)
+                    }
                 }
-                .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
 
                 HStack {
                     Spacer()
@@ -95,7 +115,9 @@ struct LoginView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.brandTeal)
-                .disabled(vm.isLoading || vm.email.isEmpty || vm.password.isEmpty)
+                // Enabled even when fields are empty so tapping surfaces the
+                // "Email is required" / "Password is required" messages (mirrors Android).
+                .disabled(vm.isLoading)
             }
         }
     }

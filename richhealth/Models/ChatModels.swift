@@ -9,7 +9,9 @@ struct ChatMessage: Identifiable {
     let kind: Kind
     let reasoning: String?   // AI thinking trace — nil when absent or empty
     var isSaved: Bool
-    let memorySaved: Bool
+    // Mutable so send() can set it from the response's memoriesAdded (badge shows on fresh replies,
+    // not only after reload). Persisted value still arrives via ChatMessageDTO.memorySaved on reload.
+    var memorySaved: Bool
     // Quick-log cards attached to an AI reply (Android dataCards). Ephemeral — never persisted.
     var cards: [HealthCardDTO] = []
 }
@@ -159,6 +161,10 @@ struct DependentsListResponse: Decodable {
     let dependents: [DependentEntry]
 }
 
+/// One saved memory as returned by POST .../messages — the backend sends objects
+/// ({_id, fact, category}), NOT plain strings, so we decode the object and read `fact`.
+struct MemoryFactDTO: Decodable { let fact: String? }
+
 /// Response from POST /api/chat/sessions/:sessionId/messages.
 struct SendMessageResponse: Decodable {
     let userMessage: ChatMessageDTO
@@ -170,6 +176,42 @@ struct SendMessageResponse: Decodable {
     let sessionLimit: Int?
     // Quick-log cards for the AI reply — absent or [] is normal (feature off / nothing detected).
     let dataCards: [HealthCardDTO]?
+    // Memories the backend saved from this turn (array of objects). Non-empty → show the
+    // "Remembered" badge on the fresh AI reply. `memorySaved` is a fallback for a bool shape.
+    let memoriesAdded: [MemoryFactDTO]?
+    let memorySaved: Bool?
+}
+
+// ── Extract logs (POST /api/chat/sessions/:sessionId/extract-logs) ─────────────
+// Scans the conversation and creates health records the user mentioned, then reports what
+// was created / remembered / skipped. All fields optional — the backend omits empty groups.
+
+/// Response from POST /api/chat/sessions/:sessionId/extract-logs.
+struct ExtractLogsResponse: Decodable {
+    /// One created record. `title` is used by symptoms/measurements; `name` by medications;
+    /// periods carry only `id`. All optional so a single type covers every group.
+    struct CreatedItem: Decodable {
+        let id: String?
+        let title: String?
+        let name: String?
+    }
+
+    struct Created: Decodable {
+        let symptoms: [CreatedItem]?
+        let measurements: [CreatedItem]?
+        let medications: [CreatedItem]?
+        let periods: [CreatedItem]?
+    }
+
+    struct SkippedItem: Decodable {
+        let type: String?
+        let title: String?
+        let reason: String?
+    }
+
+    let created: Created?
+    let memoriesAdded: [String]?
+    let skipped: [SkippedItem]?
 }
 
 /// A tap-to-ask starter question from GET /api/chat/suggestions.

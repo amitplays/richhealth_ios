@@ -32,8 +32,20 @@ struct UserProfile: Codable, Identifiable {
 
     // Habits
     let smokingStatus: String?          // "never"|"ex"|"social"|"occasional"|"regular"
-    let alcoholConsumption: String?     // "None"|"Rarely"|"Special Occasions"|"Socially"|"Regularly"|"Frequently"
+    let smoker: Bool?
+    let smokingLevel: Int?              // 0–4
+    let smokingFrequency: String?       // "Non-smoker"|"Social"|"Occasional"|"Regular"|...
+    let alcoholConsumption: String?     // "None"|"Special Occasions"|"Socially"|"Regularly"|"Frequently"
+    let alcoholLevel: Int?              // 0–4
     let caffeineHabit: String?          // "none"|"tea"|"coffee"|"both"|"energy_drinks"
+
+    // Habit / condition follow-ups (conditional at signup)
+    let smokingDuration: String?
+    let cigarettesPerDay: String?
+    let lastSmoked: String?
+    let drinksPerWeek: String?
+    let conditionsDiagnosed: String?
+    let conditionsMedicated: String?
 
     // Reproductive health (conditional for female users)
     let menstrualStatus: String?        // "regular"|"irregular"|"perimenopause"|"menopause"|"not_applicable"|"prefer_not_to_say"
@@ -62,7 +74,10 @@ struct UserProfile: Codable, Identifiable {
         case medicalConditions, allergies, familyHistory
         case sleepHours, waterIntake, mealsPerDay, stressLevel
         case screenTimeBeforeBed, sunExposure, occupationType
-        case smokingStatus, alcoholConsumption, caffeineHabit
+        case smokingStatus, smoker, smokingLevel, smokingFrequency
+        case alcoholConsumption, alcoholLevel, caffeineHabit
+        case smokingDuration, cigarettesPerDay, lastSmoked, drinksPerWeek
+        case conditionsDiagnosed, conditionsMedicated
         case menstrualStatus, pregnancyStatus, averageCycleLength, averagePeriodLength
         case contraceptionMethod, menstrualSymptoms, ethnicity
         case familyHistoryRelatives, medicationCategories, weeklyGoal, recentWeightChange
@@ -108,8 +123,22 @@ struct UserProfile: Codable, Identifiable {
         sunExposure          = try? c.decode(String.self,         forKey: .sunExposure)
         occupationType       = try? c.decode(String.self,         forKey: .occupationType)
         smokingStatus        = try? c.decode(String.self,         forKey: .smokingStatus)
+        smoker               = try? c.decode(Bool.self,           forKey: .smoker)
+        if let i = try? c.decode(Int.self,    forKey: .smokingLevel) { smokingLevel = i }
+        else if let d = try? c.decode(Double.self, forKey: .smokingLevel) { smokingLevel = Int(d) }
+        else { smokingLevel = nil }
+        smokingFrequency     = try? c.decode(String.self,         forKey: .smokingFrequency)
         alcoholConsumption   = try? c.decode(String.self,         forKey: .alcoholConsumption)
+        if let i = try? c.decode(Int.self,    forKey: .alcoholLevel) { alcoholLevel = i }
+        else if let d = try? c.decode(Double.self, forKey: .alcoholLevel) { alcoholLevel = Int(d) }
+        else { alcoholLevel = nil }
         caffeineHabit        = try? c.decode(String.self,         forKey: .caffeineHabit)
+        smokingDuration      = try? c.decode(String.self,         forKey: .smokingDuration)
+        cigarettesPerDay     = try? c.decode(String.self,         forKey: .cigarettesPerDay)
+        lastSmoked           = try? c.decode(String.self,         forKey: .lastSmoked)
+        drinksPerWeek        = try? c.decode(String.self,         forKey: .drinksPerWeek)
+        conditionsDiagnosed  = try? c.decode(String.self,         forKey: .conditionsDiagnosed)
+        conditionsMedicated  = try? c.decode(String.self,         forKey: .conditionsMedicated)
         menstrualStatus      = try? c.decode(String.self,         forKey: .menstrualStatus)
         pregnancyStatus      = try? c.decode(String.self,         forKey: .pregnancyStatus)
         if let i = try? c.decode(Int.self,    forKey: .averageCycleLength)  { averageCycleLength  = i }
