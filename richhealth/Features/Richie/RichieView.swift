@@ -525,10 +525,10 @@ private struct ChatBubbleView: View {
                             withAnimation(.easeInOut) { showReasoning.toggle() }
                         } label: {
                             HStack(spacing: Theme.Spacing.xs) {
-                                Image(systemName: "chevron.right")
-                                    .rotationEffect(.degrees(showReasoning ? 90 : 0))
                                 Image(systemName: "brain")
                                 Text("Thought process")
+                                Image(systemName: "chevron.right")
+                                    .rotationEffect(.degrees(showReasoning ? 90 : 0))
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
