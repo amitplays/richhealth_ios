@@ -9,6 +9,7 @@ struct ProfileView: View {
     @State private var showLogoutConfirm = false
     @State private var showCustomInstructionsEditor = false
     @State private var showLegal = false
+    @State private var showRequests = false
     @State private var health = HealthKitManager.shared
 
     var body: some View {
@@ -78,6 +79,16 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    // Family requests — appears only when there are pending incoming requests.
+                    if vm.pendingRequestCount > 0 {
+                        Button {
+                            showRequests = true
+                        } label: {
+                            Label("\(vm.pendingRequestCount)", systemImage: "person.2.fill")
+                        }
+                        .tint(Theme.brandTeal)
+                    }
+
                     Button {
                         vm.prepareEditForm(from: appEnv.auth.currentUser)
                         vm.showEditSheet = true
@@ -101,6 +112,9 @@ struct ProfileView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("You'll need to sign in again to access your health data.")
+            }
+            .sheet(isPresented: $showRequests) {
+                FamilyRequestsSheet(onChanged: { Task { await vm.loadPendingRequests() } })
             }
             .sheet(isPresented: $vm.showEditSheet) { EditProfileSheet(vm: vm, auth: appEnv.auth) }
             .sheet(isPresented: $vm.showPaywall) { PaywallView() }

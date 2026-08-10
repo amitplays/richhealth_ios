@@ -349,6 +349,22 @@ struct IncomingDoctorRequestsResponse: Decodable {
     let incomingDoctorRequests: [IncomingDoctorRequest]
 }
 
+// MARK: - Incoming family requests  /api/user/relationship/requests
+
+/// A relative-connection request the current user received. `name`/`relationship`
+/// are enriched by the backend (sender's name); `status` defaults to "pending".
+struct IncomingFamilyRequest: Decodable, Identifiable {
+    let email: String
+    let name: String?
+    let relationship: String?
+    let status: String?
+    var id: String { email }
+}
+
+struct FamilyRequestsResponse: Decodable {
+    let incomingRequests: [IncomingFamilyRequest]
+}
+
 // MARK: - Health Analysis  /api/health/analysis
 
 struct HealthAnalysisResponse: Decodable {

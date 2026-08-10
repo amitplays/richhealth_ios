@@ -20,6 +20,9 @@ import Foundation
     var familyProMemberCount = 0
     var maxFamilyMembers = 5
 
+    /// Number of pending incoming family requests → drives the Profile header/toolbar badge.
+    var pendingRequestCount = 0
+
     // AQI from SessionCache shown in header "At a Glance".
     var cachedAQI: Int? = nil
 
@@ -146,6 +149,12 @@ import Foundation
             familyProMemberCount = rel.familyProMemberCount ?? 0
             maxFamilyMembers    = rel.maxFamilyMembers     ?? 5
         }
+        await loadPendingRequests()
+    }
+
+    /// Refresh the count of pending incoming family requests (badge). Silent on failure.
+    func loadPendingRequests() async {
+        pendingRequestCount = (try? await FamilyService().fetchIncomingRequests())?.count ?? 0
     }
 
     func reload(auth: AuthManager) async {
