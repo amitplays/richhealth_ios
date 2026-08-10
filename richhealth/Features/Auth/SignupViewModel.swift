@@ -12,22 +12,17 @@ enum SignupStep: CaseIterable {
     case menstrual        // 2  menstrual health          (conditional: Female/Other)
     case body             // 3  height, weight, waist
     case goal             // 4  primary goal + recent weight change
-    case activity         // 5  activity level
-    case occupation       // 6  occupation
-    case diet             // 7  diet type
-    case mealsWater       // 8  meals per day + water
-    case sleep            // 9  sleep
-    case stress           // 10 stress
-    case screenTime       // 11 screen time before bed
-    case habits           // 12 smoking + alcohol + caffeine
-    case smokingDetail    // 13 smoking detail            (conditional: smoker/ex)
-    case alcoholDetail    // 14 alcohol detail            (conditional: drinks)
-    case familyHistory    // 15 family history + relatives
-    case allergies        // 16 allergies
-    case sunExposure      // 17 sun exposure
-    case medical          // 18 blood type + conditions + medications
-    case conditionDetail  // 19 condition detail          (conditional: conditions picked)
-    case ancestry         // 20 ethnicity
+    case activity         // 5  activity level + occupation
+    case diet             // 6  diet type + meals + water
+    case sleep            // 7  sleep + stress + screen time
+    case habits           // 8  smoking + alcohol + caffeine
+    case smokingDetail    // 9  smoking detail            (conditional: smoker/ex)
+    case alcoholDetail    // 10 alcohol detail            (conditional: drinks)
+    case familyHistory    // 11 family history + relatives
+    case allergies        // 12 allergies
+    case sunExposure      // 13 sun exposure + ancestry
+    case medical          // 14 blood type + conditions + medications
+    case conditionDetail  // 15 condition detail          (conditional: conditions picked)
 
     var title: String {
         switch self {
@@ -36,22 +31,17 @@ enum SignupStep: CaseIterable {
         case .menstrual:       return "Menstrual health"
         case .body:            return "Your body"
         case .goal:            return "Your goal"
-        case .activity:        return "Activity level"
-        case .occupation:      return "Occupation"
-        case .diet:            return "Your diet"
-        case .mealsWater:      return "Meals & water"
-        case .sleep:           return "Sleep"
-        case .stress:          return "Stress"
-        case .screenTime:      return "Screens before bed"
+        case .activity:        return "Daily activity"
+        case .diet:            return "Diet & meals"
+        case .sleep:           return "Rest & recovery"
         case .habits:          return "Lifestyle habits"
         case .smokingDetail:   return "About your smoking"
         case .alcoholDetail:   return "About your drinking"
         case .familyHistory:   return "Family history"
         case .allergies:       return "Allergies"
-        case .sunExposure:     return "Sun exposure"
+        case .sunExposure:     return "About you"
         case .medical:         return "Medical info"
         case .conditionDetail: return "Your condition(s)"
-        case .ancestry:        return "Your ancestry"
         }
     }
 
@@ -62,22 +52,17 @@ enum SignupStep: CaseIterable {
         case .menstrual:       return "Personalised around your cycle"
         case .body:            return "Your body metrics"
         case .goal:            return "What you want to focus on"
-        case .activity:        return "How active are you?"
-        case .occupation:      return "What do you do?"
-        case .diet:            return "How you eat"
-        case .mealsWater:      return "Two quick ones"
-        case .sleep:           return "How much you sleep"
-        case .stress:          return "How often you feel stressed"
-        case .screenTime:      return "Screens & sleep"
+        case .activity:        return "How you move & work"
+        case .diet:            return "How & what you eat"
+        case .sleep:           return "Sleep, stress & screens"
         case .habits:          return "Honest answers help us"
         case .smokingDetail:   return "A few smoking details"
         case .alcoholDetail:   return "One quick detail"
         case .familyHistory:   return "Your family's health story"
         case .allergies:       return "Safety-critical"
-        case .sunExposure:     return "Sun drives vitamin D & mood"
+        case .sunExposure:     return "Sun & ancestry"
         case .medical:         return "Optional — skip anything"
         case .conditionDetail: return "About what you're managing"
-        case .ancestry:        return "Sharpens our predictions"
         }
     }
 
@@ -89,12 +74,8 @@ enum SignupStep: CaseIterable {
         case .body:            return "figure.stand"
         case .goal:            return "target"
         case .activity:        return "figure.walk"
-        case .occupation:      return "briefcase.fill"
         case .diet:            return "fork.knife"
-        case .mealsWater:      return "cup.and.saucer.fill"
         case .sleep:           return "bed.double.fill"
-        case .stress:          return "brain.head.profile"
-        case .screenTime:      return "iphone"
         case .habits:          return "wineglass.fill"
         case .smokingDetail:   return "smoke.fill"
         case .alcoholDetail:   return "wineglass"
@@ -103,7 +84,6 @@ enum SignupStep: CaseIterable {
         case .sunExposure:     return "sun.max.fill"
         case .medical:         return "cross.case.fill"
         case .conditionDetail: return "stethoscope"
-        case .ancestry:        return "globe"
         }
     }
 }
@@ -143,7 +123,7 @@ enum SignupStep: CaseIterable {
     var recentWeightChange = ""              // Gained|Lost|Stable|Not sure
 
     // ─── Step 5: Activity ────────────────────────────────────────────────────
-    var activityLevel = 3                    // 1–5
+    var activitySel = ""                     // maps to Int 1–5 (empty until picked)
 
     // ─── Step 6: Occupation ──────────────────────────────────────────────────
     var occupationType = ""                  // desk|physical|healthcare|student|remote|retired|<other>
@@ -158,13 +138,13 @@ enum SignupStep: CaseIterable {
     var waterIntakeSel = ""                   // maps to Int glasses (2|5|8|10); empty until picked
 
     // ─── Step 9: Sleep ───────────────────────────────────────────────────────
-    var sleepHours: Double = 7
+    var sleepSel = ""                        // maps to Double hours (empty until picked)
 
     // ─── Step 10: Stress ─────────────────────────────────────────────────────
-    var stressSel = "2"                      // maps to Int 1–4
+    var stressSel = ""                       // maps to Int 1–4 (empty until picked)
 
     // ─── Step 11: Screen time ────────────────────────────────────────────────
-    var screenTimeBeforeBed = "moderate"     // low|moderate|high|very_high
+    var screenTimeBeforeBed = ""             // low|moderate|high|very_high (empty until picked)
 
     // ─── Step 12: Habits ─────────────────────────────────────────────────────
     var smokingStatus = ""                    // never|ex|social|occasional|regular (empty until picked)
@@ -190,7 +170,7 @@ enum SignupStep: CaseIterable {
     var allergiesOther = ""
 
     // ─── Step 17: Sun exposure ───────────────────────────────────────────────
-    var sunExposure = "moderate"             // low|moderate|high
+    var sunExposure = ""                     // low|moderate|high (empty until picked)
 
     // ─── Step 18: Medical ────────────────────────────────────────────────────
     var bloodType = ""                       // "" = don't know
@@ -252,8 +232,22 @@ enum SignupStep: CaseIterable {
 
     // ─── Options (mirror Android OnboardingActivity.initCardStepConfigs) ──────
 
-    let genderOptions   = ["Male", "Female", "Other"]
-    let activityOptions = ["Mostly Sitting", "Light Activity", "Moderately Active", "Very Active", "Athlete"]
+    let genderOptions = ["Male", "Female", "Other"]
+
+    let activityCardOptions: [SelectableCardOption] = [
+        .init("1", title: "Mostly Sitting",    systemImage: "figure.seated.side"),
+        .init("2", title: "Light Activity",    systemImage: "figure.walk"),
+        .init("3", title: "Moderately Active", systemImage: "figure.hiking"),
+        .init("4", title: "Very Active",       systemImage: "figure.run"),
+        .init("5", title: "Athlete",           systemImage: "figure.strengthtraining.traditional")
+    ]
+
+    let sleepCardOptions: [SelectableCardOption] = [
+        .init("4.5", title: "Under 5 hrs", systemImage: "moon.zzz"),
+        .init("5.5", title: "5–6 hrs",     systemImage: "moon"),
+        .init("7.5", title: "7–8 hrs",     systemImage: "bed.double"),
+        .init("9",   title: "9+ hrs",      systemImage: "bed.double.fill")
+    ]
 
     let goalOptions: [SelectableCardOption] = [
         .init("Weight Loss",                title: "Lose Weight",      systemImage: "arrow.down.circle"),
@@ -585,9 +579,11 @@ enum SignupStep: CaseIterable {
 
         // These card questions start empty (for progressive reveal); if the user skipped
         // the step entirely, fall back to sensible defaults so the payload stays valid.
-        let finalSmoking  = smokingStatus.isEmpty ? "never" : smokingStatus
-        let finalAlcohol  = alcoholConsumption.isEmpty ? "None" : alcoholConsumption
-        let finalCaffeine = caffeineHabit.isEmpty ? "none" : caffeineHabit
+        let finalSmoking    = smokingStatus.isEmpty ? "never" : smokingStatus
+        let finalAlcohol    = alcoholConsumption.isEmpty ? "None" : alcoholConsumption
+        let finalCaffeine   = caffeineHabit.isEmpty ? "none" : caffeineHabit
+        let finalScreenTime = screenTimeBeforeBed.isEmpty ? "moderate" : screenTimeBeforeBed
+        let finalSun        = sunExposure.isEmpty ? "moderate" : sunExposure
 
         // Derived smoking fields (mirror Android's habits collector switch).
         let smoker: Bool
@@ -638,15 +634,15 @@ enum SignupStep: CaseIterable {
             waistCircumference: waistUnknown ? nil : waistCircumferenceCm,
             primaryGoal: resolvedGoal.isEmpty ? nil : resolvedGoal,
             recentWeightChange: recentWeightChange.isEmpty ? nil : recentWeightChange,
-            activityLevel: activityLevel,
+            activityLevel: Int(activitySel) ?? 3,
             occupationType: resolvedOccupation.isEmpty ? nil : resolvedOccupation,
             dietType: resolvedDiet,
             mealsPerDay: Int(mealsPerDaySel) ?? 3,
             waterIntake: Int(waterIntakeSel) ?? 6,
-            sleepHours: sleepHours > 0 ? sleepHours : nil,
+            sleepHours: Double(sleepSel),
             stressLevel: Int(stressSel) ?? 2,
-            screenTimeBeforeBed: screenTimeBeforeBed,
-            sunExposure: sunExposure,
+            screenTimeBeforeBed: finalScreenTime,
+            sunExposure: finalSun,
             smoker: smoker,
             smokingLevel: smokingLevel,
             smokingFrequency: smokingFrequency,

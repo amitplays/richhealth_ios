@@ -102,32 +102,76 @@ struct SignupView: View {
     // ─── Multi-step card form ─────────────────────────────────────────────────
 
     private var formStepsView: some View {
-        ScrollView {
-            VStack(spacing: Theme.Spacing.m) {
-                stepBars
-                stepHeaderIcon
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: Theme.Spacing.m) {
+                    stepBars
+                    stepHeaderIcon
 
-                GlassCard {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-                        stepContent
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+                            stepContent
+                        }
                     }
-                }
-                .padding(.horizontal, Theme.Spacing.m)
+                    .padding(.horizontal, Theme.Spacing.m)
 
-                if let error = vm.errorMessage {
-                    Text(error)
-                        .foregroundStyle(.red) // error feedback
-                        .font(.footnote)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Theme.Spacing.m)
+                    if let error = vm.errorMessage {
+                        Text(error)
+                            .foregroundStyle(.red) // error feedback
+                            .font(.footnote)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, Theme.Spacing.m)
+                    }
+
+                    // Scroll target: when answering a question reveals the next one,
+                    // we smoothly bring this bottom anchor into view.
+                    Color.clear.frame(height: 1).id("stepBottom")
+                }
+                .padding(.bottom, Theme.Spacing.m)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            // One consistent primary button, pinned to the bottom on every step.
+            .safeAreaInset(edge: .bottom) { navigationButtons }
+            .id(vm.stepIndex) // reset scroll position between steps
+            // Only fires on a within-step reveal (revealKey excludes stepIndex), so a
+            // step change resets to top via .id() without also scrolling to the bottom.
+            .onChange(of: revealKey) {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    proxy.scrollTo("stepBottom", anchor: .bottom)
                 }
             }
-            .padding(.bottom, Theme.Spacing.m)
         }
-        .scrollDismissesKeyboard(.interactively)
-        // One consistent primary button, pinned to the bottom on every step.
-        .safeAreaInset(edge: .bottom) { navigationButtons }
-        .id(vm.stepIndex) // reset scroll position between steps
+    }
+
+    /// Concatenation of every gating answer across steps. When any of these change,
+    /// a new question has typically been revealed — trigger the smooth auto-scroll.
+    /// Deliberately excludes stepIndex so moving between steps doesn't scroll to the bottom.
+    private var revealKey: String {
+        [
+            vm.menstrualStatus,
+            String(vm.menstrualSymptoms.count),
+            vm.pregnancyStatus,
+            vm.cycleLengthSel,
+            vm.periodLengthSel,
+            vm.primaryGoal,
+            vm.activitySel,
+            vm.occupationType,
+            vm.dietType,
+            vm.mealsPerDaySel,
+            vm.waterIntakeSel,
+            vm.sleepSel,
+            vm.stressSel,
+            vm.screenTimeBeforeBed,
+            vm.smokingStatus,
+            vm.alcoholConsumption,
+            vm.smokingDuration,
+            vm.cigarettesPerDay,
+            String(vm.familyHistory.count),
+            String(vm.medicalConditions.count),
+            vm.conditionsDiagnosed,
+            vm.sunExposure,
+            vm.ethnicity
+        ].joined(separator: "|")
     }
 
     // Single primary CTA (Continue / Create account), fixed at the bottom, consistent shape.
@@ -184,12 +228,8 @@ struct SignupView: View {
         case .body:            stepBodyContent
         case .goal:            stepGoalContent
         case .activity:        stepActivityContent
-        case .occupation:      stepOccupationContent
         case .diet:            stepDietContent
-        case .mealsWater:      stepMealsWaterContent
         case .sleep:           stepSleepContent
-        case .stress:          stepStressContent
-        case .screenTime:      stepScreenTimeContent
         case .habits:          stepHabitsContent
         case .smokingDetail:   stepSmokingDetailContent
         case .alcoholDetail:   stepAlcoholDetailContent
@@ -198,7 +238,6 @@ struct SignupView: View {
         case .sunExposure:     stepSunExposureContent
         case .medical:         stepMedicalContent
         case .conditionDetail: stepConditionDetailContent
-        case .ancestry:        stepAncestryContent
         }
     }
 
@@ -357,65 +396,52 @@ struct SignupView: View {
         }
     }
 
-    // ─── Activity ─────────────────────────────────────────────────────────────
+    // ─── Activity (activity level + occupation) ────────────────────────────────
 
     @ViewBuilder private var stepActivityContent: some View {
-        pickerField("Activity level") {
-            Picker("Activity level", selection: $vm.activityLevel) {
-                ForEach(1...5, id: \.self) { level in
-                    Text(vm.activityOptions[level - 1]).tag(level)
-                }
-            }
+        sectionHeader("How active are you day to day?")
+        SelectableCardGrid(options: vm.activityCardOptions, selection: $vm.activitySel, columns: 1)
+
+        reveal(answered(vm.activitySel)) {
+            sectionHeader("What best describes your work?")
+            SelectableCardGrid(options: vm.occupationOptions,
+                               selection: $vm.occupationType,
+                               otherText: $vm.occupationOther)
         }
     }
 
-    // ─── Occupation ───────────────────────────────────────────────────────────
-
-    @ViewBuilder private var stepOccupationContent: some View {
-        SelectableCardGrid(options: vm.occupationOptions,
-                           selection: $vm.occupationType,
-                           otherText: $vm.occupationOther)
-    }
-
-    // ─── Diet ─────────────────────────────────────────────────────────────────
+    // ─── Diet (diet type + meals + water) ──────────────────────────────────────
 
     @ViewBuilder private var stepDietContent: some View {
+        sectionHeader("How would you describe your diet?")
         SelectableCardGrid(options: vm.dietOptions,
                            selection: $vm.dietType,
                            otherText: $vm.dietTypeOther)
-    }
 
-    // ─── Meals + Water ────────────────────────────────────────────────────────
-
-    @ViewBuilder private var stepMealsWaterContent: some View {
-        sectionHeader("How many meals a day?")
-        SelectableCardGrid(options: vm.mealsOptions, selection: $vm.mealsPerDaySel)
-
+        reveal(answered(vm.dietType)) {
+            sectionHeader("How many meals a day?")
+            SelectableCardGrid(options: vm.mealsOptions, selection: $vm.mealsPerDaySel)
+        }
         reveal(answered(vm.mealsPerDaySel)) {
             sectionHeader("How much water do you drink?")
             SelectableCardGrid(options: vm.waterOptions, selection: $vm.waterIntakeSel)
         }
     }
 
-    // ─── Sleep ────────────────────────────────────────────────────────────────
+    // ─── Sleep (sleep + stress + screen time) ──────────────────────────────────
 
     @ViewBuilder private var stepSleepContent: some View {
-        stepperRow(title: "Average sleep hours",
-                   value: String(format: "%.1f hrs", vm.sleepHours)) {
-            Stepper("", value: $vm.sleepHours, in: 3...12, step: 0.5).labelsHidden()
+        sectionHeader("How much do you sleep?")
+        SelectableCardGrid(options: vm.sleepCardOptions, selection: $vm.sleepSel)
+
+        reveal(answered(vm.sleepSel)) {
+            sectionHeader("How often do you feel stressed?")
+            SelectableCardGrid(options: vm.stressOptions, selection: $vm.stressSel)
         }
-    }
-
-    // ─── Stress ───────────────────────────────────────────────────────────────
-
-    @ViewBuilder private var stepStressContent: some View {
-        SelectableCardGrid(options: vm.stressOptions, selection: $vm.stressSel)
-    }
-
-    // ─── Screen time ──────────────────────────────────────────────────────────
-
-    @ViewBuilder private var stepScreenTimeContent: some View {
-        SelectableCardGrid(options: vm.screenTimeOptions, selection: $vm.screenTimeBeforeBed, columns: 1)
+        reveal(answered(vm.stressSel)) {
+            sectionHeader("Screens before bed?")
+            SelectableCardGrid(options: vm.screenTimeOptions, selection: $vm.screenTimeBeforeBed, columns: 1)
+        }
     }
 
     // ─── Habits ───────────────────────────────────────────────────────────────
@@ -488,10 +514,19 @@ struct SignupView: View {
                             otherText: $vm.allergiesOther)
     }
 
-    // ─── Sun exposure ─────────────────────────────────────────────────────────
+    // ─── Sun exposure + ancestry ───────────────────────────────────────────────
 
     @ViewBuilder private var stepSunExposureContent: some View {
+        sectionHeader("How much sun do you get?")
         SelectableCardGrid(options: vm.sunExposureOptions, selection: $vm.sunExposure, columns: 1)
+
+        reveal(answered(vm.sunExposure)) {
+            Text("Risk for some conditions varies by ancestry — this sharpens our predictions.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            sectionHeader("What's your ancestry?")
+            SelectableCardGrid(options: vm.ethnicityOptions, selection: $vm.ethnicity)
+        }
     }
 
     // ─── Medical ──────────────────────────────────────────────────────────────
@@ -542,15 +577,6 @@ struct SignupView: View {
         }
     }
 
-    // ─── Ancestry ─────────────────────────────────────────────────────────────
-
-    @ViewBuilder private var stepAncestryContent: some View {
-        Text("Risk for some conditions varies by ancestry — this sharpens our predictions.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        SelectableCardGrid(options: vm.ethnicityOptions, selection: $vm.ethnicity)
-    }
-
     // ─── Step progress bars ────────────────────────────────────────────────────
 
     private var stepBars: some View {
@@ -596,7 +622,7 @@ struct SignupView: View {
     /// Sub-section title inside a multi-question step card.
     @ViewBuilder private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.subheadline.weight(.semibold))
+            .font(.headline)
             .foregroundStyle(Theme.brandTeal)   // questions in blue/teal
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, Theme.Spacing.xs)
