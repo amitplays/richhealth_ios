@@ -29,8 +29,10 @@ struct PaywallView: View {
                 footer
             }
         }
-        .presentationDetents([.large])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        // Glass bottom-drawer look — translucent material behind the sheet.
+        .presentationBackground(.thinMaterial)
         .task { await store.loadProducts() }
         .onAppear { Analytics.shared.track(.paywallView) }
         .alert("Purchase Error", isPresented: Binding(

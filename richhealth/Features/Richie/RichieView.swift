@@ -95,6 +95,17 @@ struct RichieView: View {
                 .padding(.horizontal, Theme.Spacing.l)
                 .padding(.top, Theme.Spacing.xxl)
 
+                // Limit banner — surfaced here too, not just in the message list. When a limit is
+                // hit on the FIRST message of a new chat, send() removes the temp message and we fall
+                // back to this empty state; without this the monthly/session limit was silently swallowed.
+                if vm.limitKind == .monthlySessionLimit {
+                    monthlyLimitBanner
+                        .padding(.horizontal, Theme.Spacing.m)
+                } else if vm.limitKind == .sessionMessageLimit {
+                    sessionLimitBanner
+                        .padding(.horizontal, Theme.Spacing.m)
+                }
+
                 // Suggestion cards — accordion: collapsed by default, tap to expand.
                 // Mirrors Android AIFragment "Suggested for you" section.
                 if !vm.suggestions.isEmpty {
@@ -318,7 +329,10 @@ struct RichieView: View {
         @State private var showUsageInfo = false
 
         var body: some View {
-        let blocked = vm.limitKind != nil
+        // Only the session-message limit locks the composer (correct action there is
+        // "Start New Chat"). For the monthly/rate limit we KEEP send tappable so each tap
+        // re-presents the paywall drawer without sending (see RichieViewModel.send()).
+        let blocked = vm.limitKind == .sessionMessageLimit
         return GlassEffectContainer(spacing: 0) {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             // Text input
@@ -416,6 +430,7 @@ struct RichieView: View {
                         .symbolEffect(.bounce, value: vm.isSending)   // native send bounce
                 }
                 .disabled(vm.input.trimmingCharacters(in: .whitespaces).isEmpty || vm.isSending || blocked)
+                .sensoryFeedback(.impact(weight: .light), trigger: vm.isSending)   // native send haptic
             }
         }
         .padding(.horizontal, Theme.Spacing.m)

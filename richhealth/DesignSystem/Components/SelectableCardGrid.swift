@@ -68,6 +68,7 @@ struct SelectableCardGrid: View {
                 SelectableOtherField(text: otherText)
             }
         }
+        .sensoryFeedback(.selection, trigger: selection)   // native haptic on each pick
     }
 }
 
@@ -99,6 +100,7 @@ struct MultiSelectCardGrid: View {
                 SelectableOtherField(text: otherText)
             }
         }
+        .sensoryFeedback(.selection, trigger: selection)   // native haptic on each toggle
     }
 
     private func toggle(_ option: SelectableCardOption) {

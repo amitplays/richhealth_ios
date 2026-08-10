@@ -4,9 +4,10 @@ struct LoginView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var vm = LoginViewModel()
     @State private var goToSignup = false
-    // Drives the continuous logo spin. Reuses the BrandedLoaderView motif — Android spins
-    // the logo during login; a continuous spin matches the app's logo-spin motif.
+    // Drives the logo spin. It's a loading indicator: spins only while the login call is
+    // in-flight and settles upright when the call finishes or fails (mirrors Android).
     @State private var spinning = false
+    @State private var showPassword = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -45,9 +46,12 @@ struct LoginView: View {
                 .scaledToFit()
                 .frame(width: 80, height: 80)
                 .rotationEffect(.degrees(spinning ? 360 : 0))
-                .animation(.linear(duration: 3).repeatForever(autoreverses: false),
+                // Continuous spin while loading; a gentle ease-out settle when it stops.
+                .animation(spinning
+                           ? .linear(duration: 1).repeatForever(autoreverses: false)
+                           : .easeOut(duration: 0.25),
                            value: spinning)
-                .onAppear { spinning = true }
+                .onChange(of: vm.isLoading) { _, loading in spinning = loading }
             Text("RichHealth")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(Theme.brandTeal)
@@ -83,11 +87,31 @@ struct LoginView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)   // tap anywhere in the row focuses
                             .padding(Theme.Spacing.m)
                         Divider()
-                        SecureField("Password", text: $vm.password)
+                        HStack(spacing: Theme.Spacing.s) {
+                            Group {
+                                if showPassword {
+                                    TextField("Password", text: $vm.password)
+                                } else {
+                                    SecureField("Password", text: $vm.password)
+                                }
+                            }
                             .textContentType(.password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                             .focused($focused)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(Theme.Spacing.m)
+                            .frame(maxWidth: .infinity, alignment: .leading)   // tap anywhere in the row focuses
+                            Button {
+                                showPassword.toggle()
+                            } label: {
+                                Image(systemName: showPassword ? "eye.slash" : "eye")
+                                    .foregroundStyle(.secondary)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                            .sensoryFeedback(.selection, trigger: showPassword)
+                        }
+                        .padding(Theme.Spacing.m)
                     }
                     .glassEffect(.regular, in: .rect(cornerRadius: Theme.CornerRadius.input))
 
@@ -135,6 +159,8 @@ struct LoginView: View {
                 .disabled(vm.isLoading)
             }
         }
+        // Native haptics: error buzz when a login attempt fails / validation trips.
+        .sensoryFeedback(.error, trigger: vm.errorMessage)
     }
 
     // ── Sign up CTA ───────────────────────────────────────────────────────────

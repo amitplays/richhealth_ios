@@ -17,6 +17,8 @@ struct SignupView: View {
                 formStepsView
             }
         }
+        // Native haptic when advancing / going back a step.
+        .sensoryFeedback(.impact(weight: .light), trigger: vm.stepIndex)
         .navigationTitle(vm.isAccountCreated ? "Verify email" : vm.currentStep.title)
         // Own the back button: within the form it steps BACK one question-set; at step 0 it
         // exits to login. (Default back popped straight to login from any step.)
@@ -262,12 +264,14 @@ struct SignupView: View {
                 .keyboardType(.phonePad)
         }
         brandedField("Password") {
-            SecureField("Min. 6 characters", text: $vm.password)
-                .textContentType(.newPassword)
+            PasswordField(placeholder: "Min. 6 characters",
+                          text: $vm.password,
+                          textContentType: .newPassword)
         }
         brandedField("Confirm password") {
-            SecureField("Re-enter password", text: $vm.confirmPassword)
-                .textContentType(.newPassword)
+            PasswordField(placeholder: "Re-enter password",
+                          text: $vm.confirmPassword,
+                          textContentType: .newPassword)
         }
     }
 
@@ -283,6 +287,7 @@ struct SignupView: View {
                 ForEach(vm.genderOptions, id: \.self) { Text($0).tag($0) }
             }
             .pickerStyle(.segmented)
+            .sensoryFeedback(.selection, trigger: vm.gender)
         }
 
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
@@ -541,6 +546,7 @@ struct SignupView: View {
                 Text("Don't know / skip").tag("")
                 ForEach(vm.bloodTypeOptions, id: \.self) { Text($0).tag($0) }
             }
+            .sensoryFeedback(.selection, trigger: vm.bloodType)
         }
 
         sectionHeader("Any medical conditions?")

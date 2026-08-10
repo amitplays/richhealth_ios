@@ -131,6 +131,14 @@ final class RichieViewModel {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isSending else { return }
 
+        // Monthly quota exhausted → surface the paywall drawer and DON'T send. The tap keeps
+        // re-presenting the paywall (input is preserved). Session-message limit is handled
+        // separately in the UI (Start-New-Chat banner), so it's not intercepted here.
+        if limitKind == .monthlySessionLimit || limitKind == .monthlyOrRate {
+            showPaywall = true
+            return
+        }
+
         input = ""
         isSending = true
         errorMessage = nil

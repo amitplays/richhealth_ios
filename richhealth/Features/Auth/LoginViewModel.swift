@@ -76,11 +76,11 @@ import Observation
     private func applyError(_ err: APIError) {
         switch err {
         case .unauthorized:
-            // 401 → bad credentials. Surface at the fields like Android does.
-            let msg = "Invalid email or password."
-            emailError = msg
-            passwordError = msg
-            errorMessage = msg
+            // 401 → bad credentials. Show a single banner message; field-level errors are
+            // reserved for pre-submit validation (empty/format) so we don't triple-print it.
+            emailError = nil
+            passwordError = nil
+            errorMessage = "Invalid email or password."
         case .server(let status, let serverMsg):
             errorMessage = serverMsg ?? (status >= 500
                 ? "Server error. Please try again later."
