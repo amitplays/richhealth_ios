@@ -16,7 +16,12 @@ struct RichieView: View {
                     messageListView
                 }
             }
-            .safeAreaInset(edge: .bottom) { ChatInputBar(vm: vm) }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                // `.bar` backing so chat content can't read through the translucent input pill,
+                // and the inset reserves the bar's height so the last message sits ABOVE it (not under).
+                ChatInputBar(vm: vm)
+                    .background(.bar)
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // Session title only — the spinning logo now lives above the greeting (empty state).
@@ -220,7 +225,7 @@ struct RichieView: View {
     private var messageListView: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: Theme.Spacing.s) {
+                LazyVStack(spacing: Theme.Spacing.m) {   // more margin between messages (was .s — too cluttered)
                     ForEach(vm.messages) { msg in
                         ChatBubbleView(
                             message: msg,
@@ -247,10 +252,11 @@ struct RichieView: View {
                         monthlyLimitBanner.id("limitBanner")
                     }
 
-                    Color.clear.frame(height: 1).id("bottom")
+                    Color.clear.frame(height: Theme.Spacing.s).id("bottom")
                 }
                 .padding(.horizontal, Theme.Spacing.m)
-                .padding(.vertical, Theme.Spacing.s)
+                .padding(.top, Theme.Spacing.s)
+                .padding(.bottom, Theme.Spacing.m)   // clearance so the last bubble clears the input bar
             }
             .scrollDismissesKeyboard(.immediately)
             .onChange(of: vm.messages.count) { _, _ in
