@@ -76,6 +76,9 @@ final class RichieViewModel {
 
     private let service = ChatService()
     private var hasLoaded = false
+    /// Cached from GET /api/user/usage — true when the free monthly chat-session quota is spent.
+    /// Lets us block the FIRST send on a fresh chat (server truth known before sending).
+    private var monthlyChatLimitReached = false
 
     // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -86,7 +89,20 @@ final class RichieViewModel {
         hasLoaded = true
         async let s: Void = loadSuggestions()
         async let d: Void = loadDependents()
-        _ = await (s, d)
+        async let u: Void = refreshMonthlyLimit()
+        _ = await (s, d, u)
+    }
+
+    /// Fetch monthly usage so we know up front whether new chats are allowed. When the free
+    /// chat-session quota is spent we mark the current (new) chat limited → send() blocks and
+    /// surfaces the paywall instead of firing the first message at the server.
+    func refreshMonthlyLimit() async {
+        guard let usage = try? await service.fetchUsage() else { return }
+        monthlyChatLimitReached = !usage.isPro && (usage.usage.chatSessions?.limitReached ?? false)
+        // Only override when we're on a fresh chat (no active session) and nothing stricter is set.
+        if currentSession == nil, monthlyChatLimitReached, limitKind == nil {
+            limitKind = .monthlySessionLimit
+        }
     }
 
     func loadDependents() async {
@@ -246,7 +262,8 @@ final class RichieViewModel {
         currentSession = nil
         messages = []
         cardVMs = [:]
-        limitKind = nil
+        // Re-apply the known monthly limit: a new chat is exactly what the quota gates.
+        limitKind = monthlyChatLimitReached ? .monthlySessionLimit : nil
         errorMessage = nil
         input = ""
         selectedDependent = nil

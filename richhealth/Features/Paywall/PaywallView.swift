@@ -29,10 +29,11 @@ struct PaywallView: View {
                 footer
             }
         }
-        .presentationDetents([.medium, .large])
+        // Full-height bottom drawer. A translucent (.thinMaterial) sheet backing was tried but
+        // stacked with the inner GlassCards and washed the content out — keep an opaque backing so
+        // the plans/features stay readable; the glass aesthetic still comes from the cards inside.
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        // Glass bottom-drawer look — translucent material behind the sheet.
-        .presentationBackground(.thinMaterial)
         .task { await store.loadProducts() }
         .onAppear { Analytics.shared.track(.paywallView) }
         .alert("Purchase Error", isPresented: Binding(

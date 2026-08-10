@@ -59,6 +59,15 @@ struct ChatService {
         )
     }
 
+    // GET /api/user/usage — plan tier + per-feature counts/limits (usage.chatSessions.limitReached).
+    // Used to know the monthly chat-session limit BEFORE the first send, so we can block it up front.
+    func fetchUsage() async throws -> UserUsageResponse {
+        return try await api.send(
+            Endpoint(path: "/api/user/usage", showsLoader: false),
+            as: UserUsageResponse.self
+        )
+    }
+
     // GET /api/chat/suggestions
     func getSuggestions() async throws -> ChatSuggestionsResponse {
         return try await api.send(
