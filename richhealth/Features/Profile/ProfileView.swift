@@ -10,6 +10,10 @@ struct ProfileView: View {
     @State private var showCustomInstructionsEditor = false
     @State private var showLegal = false
     @State private var showRequests = false
+    // Reuses the Health Hub family flows (add dependent / connect family) from the Profile "+" menu.
+    @State private var familyVM = FamilySheetViewModel()
+    @State private var showAddFamily = false
+    @State private var showAddDependent = false
     @State private var health = HealthKitManager.shared
 
     var body: some View {
@@ -79,15 +83,34 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    // Family requests — appears only when there are pending incoming requests.
-                    if vm.pendingRequestCount > 0 {
+                    // "+" add menu — same native bubble-menu system as the Health Hub family screen.
+                    Menu {
                         Button {
-                            showRequests = true
+                            showAddDependent = true
                         } label: {
-                            Label("\(vm.pendingRequestCount)", systemImage: "person.2.fill")
+                            Label("Add Dependent", systemImage: "person.crop.circle.badge.plus")
                         }
-                        .tint(Theme.brandTeal)
+                        Button {
+                            showAddFamily = true
+                        } label: {
+                            Label("Connect Family Member", systemImage: "person.badge.plus")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
                     }
+                    .tint(Theme.brandTeal)
+
+                    // Friend / family requests — always available; shows the pending count as a badge.
+                    Button {
+                        showRequests = true
+                    } label: {
+                        if vm.pendingRequestCount > 0 {
+                            Label("\(vm.pendingRequestCount)", systemImage: "person.2.fill")
+                        } else {
+                            Image(systemName: "person.2.fill")
+                        }
+                    }
+                    .tint(Theme.brandTeal)
 
                     Button {
                         vm.prepareEditForm(from: appEnv.auth.currentUser)
@@ -116,6 +139,21 @@ struct ProfileView: View {
             .sheet(isPresented: $showRequests) {
                 FamilyRequestsSheet(onChanged: { Task { await vm.loadPendingRequests() } })
             }
+            // "+" menu add flows (reuse the Health Hub forms + view-model logic incl. paywall-on-limit).
+            .sheet(isPresented: $showAddDependent) {
+                AddDependentView { name, type, dob, gender in
+                    Task { await familyVM.addDependent(name: name, type: type, dob: dob, gender: gender) }
+                }
+            }
+            .sheet(isPresented: $showAddFamily) {
+                AddFamilyMemberView { email, rel in
+                    Task { await familyVM.addRelationship(email: email, relationship: rel) }
+                }
+            }
+            .sheet(isPresented: $familyVM.showPaywall) { PaywallView() }
+            .alert("Error", isPresented: $familyVM.showError) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(familyVM.errorMessage ?? "Something went wrong.") }
             .sheet(isPresented: $vm.showEditSheet) { EditProfileSheet(vm: vm, auth: appEnv.auth) }
             .sheet(isPresented: $vm.showPaywall) { PaywallView() }
             .sheet(isPresented: $vm.showMemorySheet) { MemoryManagerSheet(vm: vm, auth: appEnv.auth) }
