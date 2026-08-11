@@ -10,10 +10,6 @@ struct ProfileView: View {
     @State private var showCustomInstructionsEditor = false
     @State private var showLegal = false
     @State private var showRequests = false
-    // Reuses the Health Hub family flows (add dependent / connect family) from the Profile "+" menu.
-    @State private var familyVM = FamilySheetViewModel()
-    @State private var showAddFamily = false
-    @State private var showAddDependent = false
     @State private var health = HealthKitManager.shared
 
     var body: some View {
@@ -82,50 +78,37 @@ struct ProfileView: View {
             .refreshable { await vm.reload(auth: appEnv.auth) }
             .navigationTitle("Profile")
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    // "+" add menu — same native bubble-menu system as the Health Hub family screen.
+                // One "options" button → dropdown with Edit, Requests and Log Out.
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button {
-                            showAddDependent = true
+                            vm.prepareEditForm(from: appEnv.auth.currentUser)
+                            vm.showEditSheet = true
                         } label: {
-                            Label("Add Dependent", systemImage: "person.crop.circle.badge.plus")
+                            Label("Edit Profile", systemImage: "pencil")
                         }
                         Button {
-                            showAddFamily = true
+                            showRequests = true
                         } label: {
-                            Label("Connect Family Member", systemImage: "person.badge.plus")
+                            Label(vm.pendingRequestCount > 0 ? "Requests (\(vm.pendingRequestCount))" : "Requests",
+                                  systemImage: "person.2")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            showLogoutConfirm = true
+                        } label: {
+                            Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
                         }
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "ellipsis.circle")
+                            // Red dot when there are pending requests, so they're discoverable.
+                            .overlay(alignment: .topTrailing) {
+                                if vm.pendingRequestCount > 0 {
+                                    Circle().fill(.red).frame(width: 8, height: 8).offset(x: 4, y: -4)
+                                }
+                            }
                     }
                     .tint(Theme.brandTeal)
-
-                    // Friend / family requests — always available; shows the pending count as a badge.
-                    Button {
-                        showRequests = true
-                    } label: {
-                        if vm.pendingRequestCount > 0 {
-                            Label("\(vm.pendingRequestCount)", systemImage: "person.2.fill")
-                        } else {
-                            Image(systemName: "person.2.fill")
-                        }
-                    }
-                    .tint(Theme.brandTeal)
-
-                    Button {
-                        vm.prepareEditForm(from: appEnv.auth.currentUser)
-                        vm.showEditSheet = true
-                    } label: {
-                        Image(systemName: "pencil")
-                    }
-                    .tint(Theme.brandTeal)
-
-                    Button {
-                        showLogoutConfirm = true
-                    } label: {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                    }
-                    .tint(.red)
                 }
             }
             .task { await vm.load(auth: appEnv.auth) }
@@ -139,21 +122,6 @@ struct ProfileView: View {
             .sheet(isPresented: $showRequests) {
                 FamilyRequestsSheet(onChanged: { Task { await vm.loadPendingRequests() } })
             }
-            // "+" menu add flows (reuse the Health Hub forms + view-model logic incl. paywall-on-limit).
-            .sheet(isPresented: $showAddDependent) {
-                AddDependentView { name, type, dob, gender in
-                    Task { await familyVM.addDependent(name: name, type: type, dob: dob, gender: gender) }
-                }
-            }
-            .sheet(isPresented: $showAddFamily) {
-                AddFamilyMemberView { email, rel in
-                    Task { await familyVM.addRelationship(email: email, relationship: rel) }
-                }
-            }
-            .sheet(isPresented: $familyVM.showPaywall) { PaywallView() }
-            .alert("Error", isPresented: $familyVM.showError) {
-                Button("OK", role: .cancel) {}
-            } message: { Text(familyVM.errorMessage ?? "Something went wrong.") }
             .sheet(isPresented: $vm.showEditSheet) { EditProfileSheet(vm: vm, auth: appEnv.auth) }
             .sheet(isPresented: $vm.showPaywall) { PaywallView() }
             .sheet(isPresented: $vm.showMemorySheet) { MemoryManagerSheet(vm: vm, auth: appEnv.auth) }

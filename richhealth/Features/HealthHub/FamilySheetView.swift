@@ -322,7 +322,7 @@ private struct FamilyRow: View {
 
 // MARK: - Add Form
 
-struct AddFamilyMemberView: View {
+private struct AddFamilyMemberView: View {
     let onAdd: (String, String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -369,7 +369,7 @@ struct AddFamilyMemberView: View {
 private let dependentTypes = ["Child", "Parent", "Grandparent", "Sibling", "Spouse", "Other"]
 private let genderOptions = ["", "Male", "Female", "Other"]
 
-struct AddDependentView: View {
+private struct AddDependentView: View {
     let onAdd: (String, String, Date?, String) -> Void
     @Environment(\.dismiss) private var dismiss
 
