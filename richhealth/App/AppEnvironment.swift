@@ -28,6 +28,9 @@ import Observation
     func bootstrap() async {
         let start = Date()
         await auth.bootstrap()
+        // Start the StoreKit transaction listener at launch (not only when the paywall opens)
+        // so auto-renewals / Ask-to-Buy / cross-device purchases are verified with the backend.
+        _ = StoreKitManager.shared
         if auth.isAuthenticated {
             Task { await startupDataWarmup() }  // runs during the splash floor AND continues after
         }

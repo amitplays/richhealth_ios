@@ -7,6 +7,40 @@ import Foundation
 struct PaymentService {
     private let api = APIClient()
 
+    // MARK: - Plans catalog (display source of truth for BOTH platforms)
+
+    /// One purchasable plan from GET /api/payment/plans (backend config/plans.js).
+    /// Prices here are INR; on iOS the *charged/displayed* price comes from StoreKit
+    /// (App Store Connect) — this is used for features / discount copy / most-popular.
+    struct PaymentPlan: Decodable, Identifiable {
+        let planId: Int
+        let tierKey: String            // "plus" | "pro" | "ultra"
+        let name: String               // "RichHealth Pro"
+        let price: Int
+        let originalPrice: Int?
+        let discountPercent: Int?
+        let discountMessage: String?
+        let durationMonths: Int?
+        let isMostPopular: Bool?
+        let features: [String]
+        var id: String { tierKey }
+        /// StoreKit product id convention: richhealth.<tier>. Matches APPLE_PRODUCT_PLAN.
+        var appleProductID: String { "richhealth.\(tierKey)" }
+    }
+
+    struct PlansResponse: Decodable {
+        let plans: [PaymentPlan]
+        let currentTier: String?
+    }
+
+    /// GET /api/payment/plans → the 3-plan catalog + the user's current tier.
+    func fetchPlans() async throws -> PlansResponse {
+        try await api.send(
+            Endpoint(path: "/api/payment/plans", showsLoader: false),
+            as: PlansResponse.self
+        )
+    }
+
     struct AppleVerifyResponse: Decodable {
         let success: Bool
         let plan: String?
