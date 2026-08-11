@@ -25,6 +25,11 @@ struct RichieView: View {
                         Text(title)
                             .font(.headline)
                             .lineLimit(1)
+                    } else if let dep = vm.selectedDependent {
+                        // Clear feedback that a relative is selected (mirrors Android's header).
+                        Text("Chat about \(dep.name)")
+                            .font(.headline)
+                            .lineLimit(1)
                     }
                 }
                 // Matches Android fragment_ai top bar: chat-history on the LEFT, new-chat on the RIGHT.

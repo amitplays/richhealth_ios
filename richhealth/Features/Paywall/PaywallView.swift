@@ -15,7 +15,6 @@ struct PaywallView: View {
         ("waveform.and.magnifyingglass", "Medical report analysis", "AI-powered analysis of uploaded medical documents"),
         ("chart.bar.xaxis", "Advanced health analysis", "Deep health trend analysis and personalized insights"),
         ("fork.knife", "Unlimited NutriCheck", "Check any food without daily limits"),
-        ("brain.head.profile", "Dietary insights", "Ongoing personalized dietary guidance"),
         ("person.2.fill", "Family plan", "Share Pro benefits with up to 5 family members")
     ]
 

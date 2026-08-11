@@ -7,6 +7,7 @@ struct HealthAnalysisSheetView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var showPaywall = false
     @State private var selectedTab = 0
     @Environment(\.dismiss) private var dismiss
 
@@ -91,6 +92,7 @@ struct HealthAnalysisSheetView: View {
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) {}
             } message: { Text(errorMessage ?? "Something went wrong.") }
+            .sheet(isPresented: $showPaywall) { PaywallView() }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
@@ -291,11 +293,13 @@ struct HealthAnalysisSheetView: View {
             }
         } catch let err as APIError {
             switch err {
-            case .limitReached: errorMessage = "Analysis limit reached. Upgrade to Pro for more analyses."
-            case .notAllowed:   errorMessage = "Health analysis requires a Pro plan."
-            default:            errorMessage = err.userMessage
+            // §10.6: backend limit/gate → the paywall sheet, not a generic error.
+            case .limitReached, .notAllowed:
+                showPaywall = true
+            default:
+                errorMessage = err.userMessage
+                showError = true
             }
-            showError = true
         } catch {
             errorMessage = "Analysis failed. Please try again."
             showError = true

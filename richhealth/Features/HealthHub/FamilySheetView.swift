@@ -14,6 +14,7 @@ final class FamilySheetViewModel {
     var relationships: [RelationshipRecord] = []
     var dependents: [DependentRecord] = []
     var showError = false
+    var showPaywall = false
     var errorMessage: String?
     var showAddForm = false
     var showAddDependent = false
@@ -23,6 +24,15 @@ final class FamilySheetViewModel {
     var dependentCount: Int?
 
     private let client = APIClient()
+
+    /// §10.6: a backend limit/gate (429/403) must surface the paywall, not a generic error.
+    /// Used by the add flows, which can return 403 `requiresUpgrade` (maxDependents / plan gate).
+    private func handleActionError(_ error: Error) {
+        if let api = error as? APIError, case .limitReached = api { showPaywall = true; return }
+        if let api = error as? APIError, case .notAllowed = api { showPaywall = true; return }
+        errorMessage = (error as? APIError)?.userMessage ?? error.localizedDescription
+        showError = true
+    }
 
     func load() async {
         guard !isLoading else { return }
@@ -56,8 +66,7 @@ final class FamilySheetViewModel {
             try await client.send(Endpoint(path: "/api/dependents", method: .post, body: body, showsLoader: false, loaderMessage: "Adding dependent…"))
             await load()
         } catch {
-            errorMessage = (error as? APIError)?.userMessage ?? error.localizedDescription
-            showError = true
+            handleActionError(error)   // 403 requiresUpgrade → paywall
         }
     }
 
@@ -68,8 +77,7 @@ final class FamilySheetViewModel {
             try await client.send(Endpoint(path: "/api/user/relationship/request", method: .post, body: body, showsLoader: false, loaderMessage: "Sending invite…"))
             await load()
         } catch {
-            errorMessage = (error as? APIError)?.userMessage ?? error.localizedDescription
-            showError = true
+            handleActionError(error)   // plan gate → paywall
         }
     }
 
@@ -170,6 +178,7 @@ struct FamilySheetView: View {
             .alert("Error", isPresented: $vm.showError) {
                 Button("OK", role: .cancel) {}
             } message: { Text(vm.errorMessage ?? "Something went wrong.") }
+            .sheet(isPresented: $vm.showPaywall) { PaywallView() }
             .confirmationDialog("Remove this person?", isPresented: Binding(
                 get: { vm.confirmRemoveRecord != nil },
                 set: { if !$0 { vm.confirmRemoveRecord = nil } }

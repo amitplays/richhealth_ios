@@ -593,7 +593,7 @@ struct ProfileView: View {
                 if let e = usage.usage.reportAnalysis  { UsageRingItem(label: "Report analysis",  entry: e) }
                 if let e = usage.usage.nutricheck      { UsageRingItem(label: "NutriCheck",        entry: e) }
                 if let e = usage.usage.healthAnalysis  { UsageRingItem(label: "Health analysis",  entry: e) }
-                if let e = usage.usage.dietaryInsights { UsageRingItem(label: "Diet insights",    entry: e) }
+                // Dietary insights hidden for now (product decision).
             }
         }
 
@@ -762,15 +762,10 @@ private struct ProfileHeaderView: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
-                            HStack(spacing: Theme.Spacing.xs) {
-                                if let tier = proAccess?.tier, tier != "free" {
-                                    StatusPill(text: proAccess?.displayName ?? "Pro", level: .green)
-                                } else if proAccess?.tier == "free" {
-                                    StatusPill(text: "Free Plan")
-                                }
-                                if user?.emailVerified == true {
-                                    StatusPill(text: "Verified", level: .green)
-                                }
+                            // Plan pill intentionally removed from the header — the plan lives on
+                            // the "Your Plan" card only (see §12: plan badges aren't status signals).
+                            if user?.emailVerified == true {
+                                StatusPill(text: "Verified", level: .green)
                             }
                         }
                         Spacer()
@@ -999,7 +994,7 @@ private struct UsageFullSheet: View {
                     if let e = usage.usage.reportAnalysis  { UsageFullRow(label: "Report analysis",  entry: e) }
                     if let e = usage.usage.nutricheck      { UsageFullRow(label: "NutriCheck",        entry: e) }
                     if let e = usage.usage.healthAnalysis  { UsageFullRow(label: "Health analysis",  entry: e) }
-                    if let e = usage.usage.dietaryInsights { UsageFullRow(label: "Dietary insights", entry: e) }
+                    // Dietary insights hidden for now (product decision).
                 }
                 .padding(Theme.Spacing.m)
             }

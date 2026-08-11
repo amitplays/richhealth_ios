@@ -50,12 +50,7 @@ struct ServicesHomeView: View {
                     AQICardView(aqiData: vm.aqiData, aqiHistory: vm.aqiHistory,
                                 city: vm.locationCity, status: vm.aqiStatus)
 
-                    // 6 — Dietary Insights
-                    DietaryInsightsCardView(
-                        insights: vm.dietaryInsights,
-                        isLoading: vm.isLoadingDietary,
-                        onRefresh: { Task { await vm.refreshDietary() } }
-                    )
+                    // 6 — Dietary Insights — hidden for now (product decision).
 
                     // 6b — NutriCheck — its own feature (Android parity), not part of Dietary Insights
                     NutriCheckCardView(

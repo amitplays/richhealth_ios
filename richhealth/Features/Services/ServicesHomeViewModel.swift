@@ -287,9 +287,14 @@ final class ServicesHomeViewModel {
     func generateAnalysis() async {
         isGeneratingAnalysis = true
         defer { isGeneratingAnalysis = false }
-        if let result = try? await analysisService.generate() {
+        do {
+            let result = try await analysisService.generate()
             healthAnalysis = result.analysis
-        }
+        } catch let err as APIError {
+            // §10.6: a backend limit must surface the paywall, not be swallowed.
+            if case .limitReached = err { showPaywall = true }
+            else if case .notAllowed = err { showPaywall = true }
+        } catch { /* transient/network — leave the card as-is */ }
     }
 
     func deleteWorkout(id: String) async {

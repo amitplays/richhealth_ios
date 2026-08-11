@@ -15,13 +15,17 @@ struct ChatService {
         )
     }
 
-    // GET /api/dependents/users — always-active dependents the user can chat on behalf of
+    // Dependents come from TWO backend sources: user-as-dependent accounts
+    // (/api/dependents/users) and embedded child/deceased profiles (/api/dependents).
+    // Android merges both; iOS must too, or embedded-profile relatives never appear in the
+    // chat picker. Resilient: if one source fails, the other still populates the picker.
     func getDependents() async throws -> [DependentEntry] {
-        let response = try await api.send(
-            Endpoint(path: "/api/dependents/users", showsLoader: false, loaderMessage: "Loading dependents…"),
-            as: DependentsListResponse.self
-        )
-        return response.dependents
+        async let usersResp    = api.send(Endpoint(path: "/api/dependents/users", showsLoader: false), as: DependentsListResponse.self)
+        async let embeddedResp = api.send(Endpoint(path: "/api/dependents",       showsLoader: false), as: DependentsListResponse.self)
+        let users    = (try? await usersResp)?.dependents ?? []
+        let embedded = (try? await embeddedResp)?.dependents ?? []
+        var seen = Set<String>()
+        return (users + embedded).filter { seen.insert($0.id).inserted }   // de-dupe, keep order
     }
 
     // GET /api/chat/sessions (sorted newest-first, max 20 — backend enforced)
