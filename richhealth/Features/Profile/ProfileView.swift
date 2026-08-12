@@ -498,7 +498,7 @@ struct ProfileView: View {
                 Spacer()
                 Toggle("", isOn: $vm.biometricEnabled).labelsHidden().tint(Theme.brandTeal)
             }
-            .disabled(!appEnv.biometric.canUseBiometrics)
+            .disabled(!appEnv.biometric.canDeviceAuthenticate)
             .onChange(of: vm.biometricEnabled) { _, enabled in
                 guard enabled else { return }
                 Task {
