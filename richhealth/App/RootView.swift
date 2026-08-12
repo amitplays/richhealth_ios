@@ -20,6 +20,8 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppTab = .richie
     @State private var loader = LoadingController.shared
+    /// Drives the one-time post-login "enable biometric lock?" offer.
+    @State private var showBiometricOffer = false
 
     var body: some View {
         Group {
@@ -43,6 +45,21 @@ struct RootView: View {
                         }
                     }
                     .animation(.easeInOut(duration: 0.25), value: appEnv.biometric.isLocked)
+                    // Offer to turn on biometric lock once, right after the first login on a
+                    // capable device — mirrors Android's LoginActivity.offerBiometricSetup.
+                    .onAppear {
+                        if appEnv.biometric.shouldOfferSetup { showBiometricOffer = true }
+                    }
+                    .alert("Enable \(appEnv.biometric.biometryLabel)?", isPresented: $showBiometricOffer) {
+                        Button("Enable") {
+                            Task { await appEnv.biometric.enableFromOffer() }
+                        }
+                        Button("Not Now", role: .cancel) {
+                            appEnv.biometric.declineOffer()
+                        }
+                    } message: {
+                        Text("Lock RichHealth with \(appEnv.biometric.biometryLabel) so only you can open your health data. You can change this anytime in Profile → Security & Privacy.")
+                    }
             }
         }
         // Global branded loader — one mount here covers every screen; APIClient toggles it.
