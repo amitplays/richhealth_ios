@@ -41,6 +41,14 @@ struct RichieView: View {
                         Image(systemName: "clock.arrow.circlepath")
                     }
                 }
+                // TEMP — pipeline test: fires a local notification in 5s. Remove after verifying.
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        LocalNotificationManager.shared.fireTest()
+                    } label: {
+                        Image(systemName: "bell.badge")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { vm.startNewChat() } label: {
                         Label("New Chat", systemImage: "square.and.pencil")
