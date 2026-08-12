@@ -452,15 +452,32 @@ struct ProfileView: View {
         }
 
         Section("General") {
+            HStack(spacing: Theme.Spacing.s) {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 15)).foregroundStyle(Theme.brandTeal).frame(width: 22, alignment: .center)
+                Text("Notifications")
+                Spacer()
+                Toggle("", isOn: $vm.notificationsEnabled).labelsHidden().tint(Theme.brandTeal)
+            }
+            .onChange(of: vm.notificationsEnabled) { _, enabled in
+                Task {
+                    // Tier drives the check-in cadence (mirrors Android). Best-effort; default free.
+                    let tier = (try? await appEnv.auth.fetchProAccess())?.tier ?? "free"
+                    let ok = await LocalNotificationManager.shared.setEnabled(enabled, tier: tier)
+                    // Turned on but denied at the OS level → revert the toggle.
+                    if enabled && !ok { vm.notificationsEnabled = false }
+                }
+            }
             Button {
                 if let url = URL(string: "App-Prefs:NOTIFICATIONS_ID") { openURL(url) }
             } label: {
                 HStack(spacing: Theme.Spacing.s) {
-                    Image(systemName: "bell.fill")
-                        .font(.system(size: 15)).foregroundStyle(Theme.brandTeal).frame(width: 22, alignment: .center)
-                    Text("Notifications")
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 15)).foregroundStyle(.secondary).frame(width: 22, alignment: .center)
+                    Text("Open iOS notification settings")
+                        .font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                    Image(systemName: "arrow.up.right").font(.caption2).foregroundStyle(.tertiary)
                 }
             }
             .foregroundStyle(.primary)

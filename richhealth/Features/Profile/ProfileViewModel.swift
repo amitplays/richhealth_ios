@@ -37,6 +37,10 @@ import Foundation
     var biometricEnabled: Bool = UserDefaults.standard.bool(forKey: "rh.biometricEnabled") {
         didSet { UserDefaults.standard.set(biometricEnabled, forKey: "rh.biometricEnabled") }
     }
+    // Master switch for local (on-device) reminders — the app's `receiveNotifications` intent.
+    var notificationsEnabled: Bool = UserDefaults.standard.bool(forKey: "rh.notificationsEnabled") {
+        didSet { UserDefaults.standard.set(notificationsEnabled, forKey: "rh.notificationsEnabled") }
+    }
 
     private let api = APIClient()
 

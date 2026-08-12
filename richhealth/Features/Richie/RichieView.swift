@@ -41,7 +41,7 @@ struct RichieView: View {
                         Image(systemName: "clock.arrow.circlepath")
                     }
                 }
-                // TEMP — pipeline test: fires a local notification in 5s. Remove after verifying.
+                // TEST (kept) — fires a local notification in 5s to probe the pipeline.
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         LocalNotificationManager.shared.fireTest()
