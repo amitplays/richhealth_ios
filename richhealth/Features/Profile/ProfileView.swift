@@ -460,9 +460,9 @@ struct ProfileView: View {
                 Toggle("", isOn: $vm.notificationsEnabled).labelsHidden().tint(Theme.brandTeal)
             }
             .onChange(of: vm.notificationsEnabled) { _, enabled in
-                // Use the plan already loaded by vm.load — NO network call from a local toggle.
-                let tier = vm.proAccess?.tier ?? "free"
                 Task {
+                    // Tier drives the check-in cadence (mirrors Android). Best-effort; default free.
+                    let tier = (try? await appEnv.auth.fetchProAccess())?.tier ?? "free"
                     let ok = await LocalNotificationManager.shared.setEnabled(enabled, tier: tier)
                     // Turned on but denied at the OS level → revert the toggle.
                     if enabled && !ok { vm.notificationsEnabled = false }
@@ -498,7 +498,7 @@ struct ProfileView: View {
                 Spacer()
                 Toggle("", isOn: $vm.biometricEnabled).labelsHidden().tint(Theme.brandTeal)
             }
-            .disabled(!appEnv.biometric.canDeviceAuthenticate)
+            .disabled(!appEnv.biometric.canUseBiometrics)
             .onChange(of: vm.biometricEnabled) { _, enabled in
                 guard enabled else { return }
                 Task {
@@ -1146,7 +1146,7 @@ private struct ChangePasswordSheet: View {
     @State private var isSaving = false
 
     private var canSave: Bool {
-        !currentPassword.isEmpty && newPassword.count >= 8 && newPassword == confirmPassword
+        !currentPassword.isEmpty && newPassword.count >= 6 && newPassword == confirmPassword
     }
 
     var body: some View {
@@ -1155,7 +1155,7 @@ private struct ChangePasswordSheet: View {
                 Section {
                     SecureField("Current password", text: $currentPassword)
                         .textContentType(.password)
-                    SecureField("New password (min. 8 characters)", text: $newPassword)
+                    SecureField("New password (min. 6 characters)", text: $newPassword)
                         .textContentType(.newPassword)
                     SecureField("Confirm new password", text: $confirmPassword)
                         .textContentType(.newPassword)
@@ -1188,17 +1188,8 @@ private struct ChangePasswordSheet: View {
             errorMessage = "Passwords do not match."
             return
         }
-        errorMessage = nil
-        isSaving = true
-        defer { isSaving = false }
-        do {
-            try await auth.changePassword(current: currentPassword, new: newPassword)
-            dismiss()
-        } catch let err as APIError {
-            errorMessage = err.userMessage
-        } catch {
-            errorMessage = "Couldn't change password. Please try again."
-        }
+        // TODO: confirm change-password endpoint in ../richhealthbackend/routes before implementing
+        errorMessage = "Password change is not yet available in this version."
     }
 }
 

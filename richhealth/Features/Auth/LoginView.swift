@@ -238,7 +238,7 @@ private struct ForgotPasswordSheet: View {
             codeSent = true
             info = "If an account exists for that email, a reset code is on its way."
         } catch let err as APIError { error = err.userMessage }
-        catch { error = "Couldn't send the code. Please try again." }
+        catch { self.error = "Couldn't send the code. Please try again." }
     }
 
     private func reset() async {
@@ -250,7 +250,7 @@ private struct ForgotPasswordSheet: View {
                 newPassword: newPassword)
             dismiss()
         } catch let err as APIError { error = err.userMessage }
-        catch { error = "Couldn't reset the password. Please try again." }
+        catch { self.error = "Couldn't reset the password. Please try again." }
     }
 }
 
