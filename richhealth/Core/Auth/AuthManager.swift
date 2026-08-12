@@ -120,6 +120,28 @@ import Observation
 
     /// GET /api/user/pro-access — always from server, never local logic (CLAUDE.md §7).
     /// showsLoader:false — runs on the Profile tab, which shows its own skeletons.
+    /// POST /api/auth/forgot-password — emails a reset code (no auth).
+    func forgotPassword(email: String) async throws {
+        struct Body: Encodable { let email: String }
+        struct Ack: Decodable { let message: String? }
+        let body = try JSONEncoder().encode(Body(email: email))
+        _ = try await api.send(
+            Endpoint(path: "/api/auth/forgot-password", method: .post, body: body, requiresAuth: false, showsLoader: false, loaderMessage: "Sending reset code…"),
+            as: Ack.self
+        )
+    }
+
+    /// POST /api/auth/reset-password — verifies the code and sets a new password (no auth).
+    func resetPassword(email: String, otp: String, newPassword: String) async throws {
+        struct Body: Encodable { let email: String; let otp: String; let newPassword: String }
+        struct Ack: Decodable { let success: Bool?; let message: String? }
+        let body = try JSONEncoder().encode(Body(email: email, otp: otp, newPassword: newPassword))
+        _ = try await api.send(
+            Endpoint(path: "/api/auth/reset-password", method: .post, body: body, requiresAuth: false, showsLoader: false, loaderMessage: "Resetting password…"),
+            as: Ack.self
+        )
+    }
+
     /// POST /api/auth/change-password — verifies the current password server-side.
     func changePassword(current: String, new: String) async throws {
         struct Body: Encodable { let currentPassword: String; let newPassword: String }

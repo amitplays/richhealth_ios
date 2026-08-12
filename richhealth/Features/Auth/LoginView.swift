@@ -8,6 +8,7 @@ struct LoginView: View {
     // in-flight and settles upright when the call finishes or fails (mirrors Android).
     @State private var spinning = false
     @State private var showPassword = false
+    @State private var showForgot = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -129,9 +130,10 @@ struct LoginView: View {
 
                 HStack {
                     Spacer()
-                    Button("Forgot password?") { /* TODO: password reset flow */ }
+                    Button("Forgot password?") { showForgot = true }
                         .font(.subheadline)
                         .foregroundStyle(Theme.brandTeal)
+                        .sheet(isPresented: $showForgot) { ForgotPasswordSheet(auth: appEnv.auth) }
                 }
 
                 Button {
@@ -176,6 +178,82 @@ struct LoginView: View {
         .font(.subheadline)
     }
 }
+
+private struct ForgotPasswordSheet: View {
+    let auth: AuthManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var otp = ""
+    @State private var newPassword = ""
+    @State private var codeSent = false
+    @State private var isBusy = false
+    @State private var error: String?
+    @State private var info: String?
+
+    private var canSend: Bool { email.contains("@") && email.contains(".") }
+    private var canReset: Bool { otp.count >= 4 && newPassword.count >= 8 }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Email", text: $email)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .disabled(codeSent)
+                }
+                if codeSent {
+                    Section("Enter the code we emailed you") {
+                        TextField("6-digit code", text: $otp).keyboardType(.numberPad)
+                        SecureField("New password (min. 8 characters)", text: $newPassword)
+                            .textContentType(.newPassword)
+                    }
+                }
+                if let info { Section { Text(info).font(.caption).foregroundStyle(.secondary) } }
+                if let error { Section { Text(error).font(.caption).foregroundStyle(.red) } }
+            }
+            .navigationTitle("Reset password")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if isBusy { ProgressView() }
+                    else if codeSent {
+                        Button("Reset") { Task { await reset() } }.disabled(!canReset).bold()
+                    } else {
+                        Button("Send code") { Task { await send() } }.disabled(!canSend).bold()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func send() async {
+        error = nil; isBusy = true; defer { isBusy = false }
+        do {
+            try await auth.forgotPassword(email: email.trimmingCharacters(in: .whitespaces))
+            codeSent = true
+            info = "If an account exists for that email, a reset code is on its way."
+        } catch let err as APIError { error = err.userMessage }
+        catch { error = "Couldn't send the code. Please try again." }
+    }
+
+    private func reset() async {
+        error = nil; isBusy = true; defer { isBusy = false }
+        do {
+            try await auth.resetPassword(
+                email: email.trimmingCharacters(in: .whitespaces),
+                otp: otp.trimmingCharacters(in: .whitespaces),
+                newPassword: newPassword)
+            dismiss()
+        } catch let err as APIError { error = err.userMessage }
+        catch { error = "Couldn't reset the password. Please try again." }
+    }
+}
+
 
 #Preview {
     NavigationStack { LoginView() }
