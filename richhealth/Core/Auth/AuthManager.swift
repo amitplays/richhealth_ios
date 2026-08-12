@@ -120,6 +120,17 @@ import Observation
 
     /// GET /api/user/pro-access — always from server, never local logic (CLAUDE.md §7).
     /// showsLoader:false — runs on the Profile tab, which shows its own skeletons.
+    /// POST /api/auth/change-password — verifies the current password server-side.
+    func changePassword(current: String, new: String) async throws {
+        struct Body: Encodable { let currentPassword: String; let newPassword: String }
+        struct Ack: Decodable { let success: Bool?; let message: String? }
+        let body = try JSONEncoder().encode(Body(currentPassword: current, newPassword: new))
+        _ = try await api.send(
+            Endpoint(path: "/api/auth/change-password", method: .post, body: body, showsLoader: false, loaderMessage: "Updating password…"),
+            as: Ack.self
+        )
+    }
+
     func fetchProAccess() async throws -> ProAccess {
         return try await api.send(Endpoint(path: "/api/user/pro-access", showsLoader: false, loaderMessage: "Checking your plan…"), as: ProAccess.self)
     }

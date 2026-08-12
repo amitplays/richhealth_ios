@@ -1146,7 +1146,7 @@ private struct ChangePasswordSheet: View {
     @State private var isSaving = false
 
     private var canSave: Bool {
-        !currentPassword.isEmpty && newPassword.count >= 6 && newPassword == confirmPassword
+        !currentPassword.isEmpty && newPassword.count >= 8 && newPassword == confirmPassword
     }
 
     var body: some View {
@@ -1155,7 +1155,7 @@ private struct ChangePasswordSheet: View {
                 Section {
                     SecureField("Current password", text: $currentPassword)
                         .textContentType(.password)
-                    SecureField("New password (min. 6 characters)", text: $newPassword)
+                    SecureField("New password (min. 8 characters)", text: $newPassword)
                         .textContentType(.newPassword)
                     SecureField("Confirm new password", text: $confirmPassword)
                         .textContentType(.newPassword)
@@ -1188,8 +1188,17 @@ private struct ChangePasswordSheet: View {
             errorMessage = "Passwords do not match."
             return
         }
-        // TODO: confirm change-password endpoint in ../richhealthbackend/routes before implementing
-        errorMessage = "Password change is not yet available in this version."
+        errorMessage = nil
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await auth.changePassword(current: currentPassword, new: newPassword)
+            dismiss()
+        } catch let err as APIError {
+            errorMessage = err.userMessage
+        } catch {
+            errorMessage = "Couldn't change password. Please try again."
+        }
     }
 }
 
