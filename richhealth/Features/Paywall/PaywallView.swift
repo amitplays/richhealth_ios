@@ -21,7 +21,6 @@ struct PaywallView: View {
     private let service = PaymentService()
 
     var body: some View {
-        ScrollView {
             VStack(spacing: Theme.Spacing.l) {
                 header
                 if plansLoading {
@@ -38,7 +37,6 @@ struct PaywallView: View {
                 footer
             }
             .padding(.horizontal, Theme.Spacing.m)
-        }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .task {
