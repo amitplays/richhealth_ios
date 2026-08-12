@@ -460,9 +460,9 @@ struct ProfileView: View {
                 Toggle("", isOn: $vm.notificationsEnabled).labelsHidden().tint(Theme.brandTeal)
             }
             .onChange(of: vm.notificationsEnabled) { _, enabled in
+                // Use the plan already loaded by vm.load — NO network call from a local toggle.
+                let tier = vm.proAccess?.tier ?? "free"
                 Task {
-                    // Tier drives the check-in cadence (mirrors Android). Best-effort; default free.
-                    let tier = (try? await appEnv.auth.fetchProAccess())?.tier ?? "free"
                     let ok = await LocalNotificationManager.shared.setEnabled(enabled, tier: tier)
                     // Turned on but denied at the OS level → revert the toggle.
                     if enabled && !ok { vm.notificationsEnabled = false }
