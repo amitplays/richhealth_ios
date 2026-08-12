@@ -50,15 +50,15 @@ struct RootView: View {
                     .onAppear {
                         if appEnv.biometric.shouldOfferSetup { showBiometricOffer = true }
                     }
-                    .alert("Enable \(appEnv.biometric.biometryLabel)?", isPresented: $showBiometricOffer) {
-                        Button("Enable") {
+                    .alert("Turn on App Lock?", isPresented: $showBiometricOffer) {
+                        Button("Turn On") {
                             Task { await appEnv.biometric.enableFromOffer() }
                         }
                         Button("Not Now", role: .cancel) {
                             appEnv.biometric.declineOffer()
                         }
                     } message: {
-                        Text("Lock RichHealth with \(appEnv.biometric.biometryLabel) so only you can open your health data. You can change this anytime in Profile → Security & Privacy.")
+                        Text("Require \(appEnv.biometric.biometryLabel) to open RichHealth, so only you can see your health data. You can change this anytime in Profile → Security & Privacy.")
                     }
             }
         }

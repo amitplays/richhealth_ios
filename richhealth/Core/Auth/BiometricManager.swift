@@ -2,18 +2,26 @@ import LocalAuthentication
 import Foundation
 import Observation
 
-/// Manages Face ID / Touch ID lock. Owned by AppEnvironment; observed by RootView overlay.
+/// Manages the app lock (Face ID / Touch ID, or the device passcode as a fallback).
+/// Owned by AppEnvironment; observed by RootView overlay. Not every user has biometrics
+/// enrolled, but almost everyone has a passcode — so the lock uses device-owner
+/// authentication, which presents biometrics when available and passcode otherwise.
 @Observable @MainActor
 final class BiometricManager {
 
-    // UserDefaults keys — the single source of truth for the biometric-lock pref
+    // UserDefaults keys — the single source of truth for the app-lock pref
     // (device-local only, matching ProfileViewModel; never synced to the server).
     private static let enabledKey = "rh.biometricEnabled"
     private static let offeredKey = "rh.biometricPromptShown"
 
     var isLocked = false
+    /// True if the device has an enrolled biometric (Face ID / Touch ID).
     private(set) var canUseBiometrics: Bool
-    /// Human label for the device's biometry ("Face ID" / "Touch ID" / "biometric lock").
+    /// True if the device can authenticate the owner at all — biometrics OR a passcode.
+    /// This is the real gate for offering the lock: passcode-only users qualify too.
+    private(set) var canDeviceAuthenticate: Bool
+    /// Human label for how the lock verifies on THIS device:
+    /// "Face ID" / "Touch ID" when enrolled, else "your passcode".
     private(set) var biometryLabel: String
 
     init() {
@@ -21,28 +29,32 @@ final class BiometricManager {
         canUseBiometrics = ctx.canEvaluatePolicy(
             .deviceOwnerAuthenticationWithBiometrics, error: nil
         )
+        // deviceOwnerAuthentication == biometrics if available, else the passcode.
+        canDeviceAuthenticate = ctx.canEvaluatePolicy(
+            .deviceOwnerAuthentication, error: nil
+        )
         switch ctx.biometryType {
-        case .faceID: biometryLabel = "Face ID"
+        case .faceID:  biometryLabel = "Face ID"
         case .touchID: biometryLabel = "Touch ID"
-        default: biometryLabel = "biometric lock"
+        default:       biometryLabel = "your passcode"
         }
     }
 
-    /// Whether biometric lock is currently turned on (device-local pref).
+    /// Whether the app lock is currently turned on (device-local pref).
     var isBiometricEnabled: Bool {
         UserDefaults.standard.bool(forKey: Self.enabledKey)
     }
 
-    /// True when we should show the one-time post-login setup offer: the device can do
-    /// biometrics, it isn't already on, and we haven't offered before. Mirrors Android's
-    /// LoginActivity.offerBiometricSetup gate (canAuthenticate + !enabled + !prompted).
+    /// True when we should show the one-time post-login setup offer: the device can
+    /// authenticate the owner (biometrics OR passcode), the lock isn't already on, and
+    /// we haven't offered before. Mirrors Android's LoginActivity.offerBiometricSetup gate.
     var shouldOfferSetup: Bool {
-        canUseBiometrics
+        canDeviceAuthenticate
             && !isBiometricEnabled
             && !UserDefaults.standard.bool(forKey: Self.offeredKey)
     }
 
-    /// User accepted the one-time offer: verify biometrics, and on success turn the lock on.
+    /// User accepted the one-time offer: verify identity, and on success turn the lock on.
     /// Records the offer as shown either way so it never re-prompts. Returns whether it enabled.
     @discardableResult
     func enableFromOffer() async -> Bool {
@@ -60,44 +72,35 @@ final class BiometricManager {
     /// Call when app moves to .background — locks if the user has the setting enabled.
     func lockIfEnabled() {
         guard UserDefaults.standard.bool(forKey: Self.enabledKey),
-              canUseBiometrics else { return }
+              canDeviceAuthenticate else { return }
         isLocked = true
     }
 
     /// Authenticate to unlock. Called automatically on .active, or on tap from lock screen.
+    /// Uses device-owner auth: iOS shows Face ID/Touch ID with a passcode fallback, or the
+    /// passcode directly on devices without biometrics.
     func authenticate() async {
         let ctx = LAContext()
         do {
             let ok = try await ctx.evaluatePolicy(
-                .deviceOwnerAuthenticationWithBiometrics,
+                .deviceOwnerAuthentication,
                 localizedReason: "Verify your identity to access your health data"
             )
             if ok { isLocked = false }
-            // userCancel / systemCancel → stay locked; user sees retry button
-        } catch let err as LAError {
-            if err.code == .biometryLockout {
-                // Device locked out of biometry — fall back to passcode
-                let fallback = LAContext()
-                if let ok = try? await fallback.evaluatePolicy(
-                    .deviceOwnerAuthentication,
-                    localizedReason: "Enter your passcode to access RichHealth"
-                ), ok {
-                    isLocked = false
-                }
-            }
+            // userCancel / systemCancel → stay locked; user sees the retry button.
         } catch {
-            isLocked = false // unknown hardware error — fail open
+            isLocked = false // unknown hardware/config error — fail open rather than lock out.
         }
     }
 
-    /// Call when the toggle turns ON — verifies Face ID works before saving.
-    /// Returns false if the user cancels or the device can't authenticate.
+    /// Call when enabling the lock — verifies Face ID/Touch ID/passcode works before saving.
+    /// Returns false if the user cancels or the device can't authenticate the owner.
     func verifyForSetup() async -> Bool {
-        guard canUseBiometrics else { return false }
+        guard canDeviceAuthenticate else { return false }
         let ctx = LAContext()
         return (try? await ctx.evaluatePolicy(
-            .deviceOwnerAuthenticationWithBiometrics,
-            localizedReason: "Set up biometric lock for RichHealth"
+            .deviceOwnerAuthentication,
+            localizedReason: "Set up app lock for RichHealth"
         )) ?? false
     }
 }

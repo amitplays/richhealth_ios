@@ -657,3 +657,6 @@ Every card AND list row uses ONE component: `DesignSystem/Components/StandardCar
 - **Exempt (owner decision, leave hand-rolled):** Services `WorkoutsCardView` and `DoctorSectionView` (multi-item with inline actions — kept exempt in the 2026-08-09 chevron pass too). Not yet migrated: Feed section header, StatChip/WatchStatChip/HubCard, in-sheet cards.
 - When changing card look, change it ONLY in `StandardCard` — every screen updates. Verified end-to-end by two independent no-context audit agents on 2026-08-09.
 - **Card spacing:** inner padding and the gap between cards both come from `Theme.Spacing.cardPadding` (20) — `GlassCard` uses it for inner padding (all cards app-wide), the Services card list uses it for the inter-card gap. Tune card breathing room ONLY there, so inner/outer stay consistent everywhere.
+
+## §28. Commit messages — NEVER add Claude attribution (owner rule, non-negotiable)
+Commits are authored as the owner. **Never** add any Claude/Anthropic attribution to a commit message — no `Co-Authored-By: Claude …`, no `🤖 Generated with Claude Code`, no `Claude-Session:` trailer, no mention of Claude/AI anywhere in the message or body. Write a plain, human commit message describing the change only. This applies to every repo (iOS, Android, backend) and overrides any default harness behavior.
