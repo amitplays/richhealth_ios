@@ -133,6 +133,18 @@ private struct EmbeddedDependentsResponse: Decodable {
     let dependents: [EmbeddedDependentRecord]
 }
 
+/// First non-empty value, trimmed. Written as a plain loop on purpose: the
+/// chained `flatMap`/`compactMap`/`??` version of this blew up Swift's type
+/// checker ("unable to type-check this expression in reasonable time").
+private func firstNonEmpty(_ values: String?...) -> String? {
+    for value in values {
+        guard let value else { continue }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+    }
+    return nil
+}
+
 // MARK: - ViewModel
 
 @Observable @MainActor
@@ -186,7 +198,7 @@ final class FamilyTreeViewModel {
                       dependentUsers: [DependentRecord],
                       embedded: [EmbeddedDependentRecord]) -> [FamilyNode] {
 
-        let name = (selfName?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? "You"
+        let name = firstNonEmpty(selfName) ?? "You"
         var out: [FamilyNode] = [
             FamilyNode(id: "__self__", name: name, relationship: "You",
                        row: .you, order: -1, isSelf: true)
@@ -200,15 +212,18 @@ final class FamilyTreeViewModel {
         }
 
         for r in relationships {
-            let key = r.userId.flatMap { $0.isEmpty ? nil : "id:\($0)" }
-                ?? r.email.flatMap { $0.isEmpty ? nil : "em:\($0)" }
-                ?? r.name.flatMap { $0.isEmpty ? nil : "nm:\($0)" }
+            var key: String?
+            if let userId = r.userId, !userId.isEmpty {
+                key = "id:\(userId)"
+            } else if let email = r.email, !email.isEmpty {
+                key = "em:\(email)"
+            } else if let name = r.name, !name.isEmpty {
+                key = "nm:\(name)"
+            }
             guard claim(key) else { continue }
 
             let place = placement(for: r.relationship)
-            let display = [r.name, r.email]
-                .compactMap { $0 }
-                .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? "Unknown"
+            let display = firstNonEmpty(r.name, r.email) ?? "Unknown"
             out.append(FamilyNode(
                 id: key ?? UUID().uuidString,
                 name: display,
