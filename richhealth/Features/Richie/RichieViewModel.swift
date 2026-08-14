@@ -164,7 +164,10 @@ final class RichieViewModel {
                                     reasoning: nil, isSaved: false, memorySaved: false))
         do {
             if currentSession == nil {
-                let session = try await service.createSession(dependentId: selectedDependent?.id)
+                // Title the session from the first message, same rule as Android
+                // (first 40 chars + "..."); without it the backend defaults to "New Chat Session".
+                let sessionTitle = text.count > 40 ? String(text.prefix(40)) + "..." : text
+                let session = try await service.createSession(title: sessionTitle, dependentId: selectedDependent?.id)
                 currentSession = session
             }
             guard let sessionId = currentSession?.id else { throw APIError.invalidResponse }
