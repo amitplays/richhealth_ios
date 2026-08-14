@@ -177,7 +177,11 @@ final class FamilyTreeViewModel {
 
     /// Merge the three sources into one ordered node list, de-duplicating anyone
     /// held in more than one of them.
-    static func build(selfName: String?,
+    ///
+    /// fileprivate because EmbeddedDependentRecord is private to this file — an
+    /// internal method cannot take a private type in its signature. Only load()
+    /// calls this, and it lives here too.
+    fileprivate static func build(selfName: String?,
                       relationships: [RelationshipRecord],
                       dependentUsers: [DependentRecord],
                       embedded: [EmbeddedDependentRecord]) -> [FamilyNode] {
