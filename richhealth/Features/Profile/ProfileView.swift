@@ -745,6 +745,8 @@ private struct ProfileHeaderView: View {
     var heartRate: Int? = nil
     var onFillProfile: (() -> Void)? = nil
 
+    @State private var showFamilyTree = false
+
     var body: some View {
         let completionFraction = user?.completionPercent ?? 0
 
@@ -794,8 +796,10 @@ private struct ProfileHeaderView: View {
                         Spacer()
                     }
 
-                    // "At a Glance" stats — Heart Rate | Air Quality | Weight | Sleep.
+                    // "At a Glance" stats — Heart Rate | Air Quality | Weight | Family.
                     // Heart Rate (from Apple Watch/HealthKit) is the headline metric.
+                    // The fourth slot is a tap target, not a metric: it opens the family
+                    // graph. Sleep is still shown in full in the Lifestyle rows below.
                     if !isLoading {
                         Divider()
                         HStack(spacing: 0) {
@@ -811,9 +815,11 @@ private struct ProfileHeaderView: View {
                                        value: user?.weight.map { String(format: "%.0f kg", $0) } ?? "—",
                                        icon: "scalemass")
                             Divider().frame(height: 36)
-                            statColumn(label: "Sleep",
-                                       value: user?.sleepHours.map { String(format: "%.0f hrs", $0) } ?? "—",
-                                       icon: "moon.fill")
+                            Button { showFamilyTree = true } label: {
+                                statColumn(label: "Family", value: "View", icon: "person.2.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("View your family tree")
                         }
 
                         // Completion CTA — only when profile is incomplete.
@@ -837,6 +843,9 @@ private struct ProfileHeaderView: View {
                         }
                     }
                 }
+        }
+        .sheet(isPresented: $showFamilyTree) {
+            FamilyTreeSheet(selfName: user?.name)
         }
     }
 

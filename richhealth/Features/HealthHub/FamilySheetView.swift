@@ -1,9 +1,22 @@
 import SwiftUI
 
+/// The one relationship list, ordered oldest generation first. Kept identical to
+/// Android's HealthDataFragment.RELATIONSHIP_OPTIONS, and every entry is covered
+/// by the backend's reciprocal map (userController.getReciprocalRelationship) so
+/// accepting an invite always produces a usable label on the other side.
+///
+/// The value describes the PICKER'S OWNER — "I am their ..." — which is what the
+/// backend stores for the recipient.
 private let relationshipOptions = [
-    "Father", "Mother", "Brother", "Sister",
-    "Grandfather", "Grandmother", "Son", "Daughter",
-    "Spouse", "Cousin", "Nephew", "Niece", "Other"
+    "Grandfather", "Grandmother",
+    "Father", "Mother",
+    "Paternal Uncle", "Paternal Aunt",
+    "Maternal Uncle", "Maternal Aunt",
+    "Spouse", "Brother", "Sister", "Cousin",
+    "Son", "Daughter",
+    "Nephew", "Niece",
+    "Grandson", "Granddaughter",
+    "Other"
 ]
 
 // MARK: - ViewModel
@@ -337,7 +350,7 @@ private struct AddFamilyMemberView: View {
                     TextField("Email address", text: $email)
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
-                    Picker("Relationship", selection: $relationship) {
+                    Picker("I am their\u{2026}", selection: $relationship) {
                         ForEach(relationshipOptions, id: \.self) { Text($0) }
                     }
                 }
@@ -438,7 +451,9 @@ private struct EditRelationshipSheet: View {
     init(record: RelationshipRecord, onSave: @escaping (String) -> Void) {
         self.record = record
         self.onSave = onSave
-        _relationship = State(initialValue: record.relationship ?? relationshipOptions[0])
+        let stored = record.relationship ?? ""
+        _relationship = State(initialValue:
+            relationshipOptions.contains(stored) ? stored : relationshipOptions[0])
     }
 
     var body: some View {
@@ -448,12 +463,12 @@ private struct EditRelationshipSheet: View {
                     if let name = record.name ?? record.email {
                         Text(name).font(.headline).foregroundStyle(.primary)
                     }
-                    Text("Update how this person is related to you.")
+                    Text("Update how you are related to this person.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Section("Relationship") {
-                    Picker("Relationship", selection: $relationship) {
+                    Picker("I am their\u{2026}", selection: $relationship) {
                         ForEach(relationshipOptions, id: \.self) { Text($0) }
                     }
                     .pickerStyle(.wheel)
