@@ -12,21 +12,12 @@ enum WatchAPIConfig {
 
 /// Reads the JWT the iPhone app stores in the Keychain, so the watch is signed in
 /// automatically. Mirrors iOS `KeychainStore` (service `ai.richhealth.auth`, account `jwt`)
-/// but adds an access group so BOTH targets can see the same item.
-///
-/// TWO things must line up for this to work (see the wiring steps):
-///   1. Both the iOS target and this Watch target list the SAME Keychain access group.
-///   2. The iOS `KeychainStore` writes the token WITH that access group.
-/// Until then, `token` is nil on the watch and the UI shows a "Sign in on iPhone" state.
-///
-/// DEBUG shortcut: paste a JWT into `debugToken` to test the whole watch app in minutes
-/// against the live backend WITHOUT wiring Keychain sharing first. Leave it "" for release.
+/// plus an access group so BOTH targets (and the widget) can read the same item.
+/// DEBUG shortcut: paste a JWT into `debugToken` to test instantly without wiring sharing.
 enum WatchKeychainStore {
-    /// Set to your Team ID + suffix, e.g. "ABCDE12345.ai.richhealth.shared".
-    /// Must exactly match the keychain-access-groups entitlement on BOTH targets.
+    /// Set to "<YourTeamID>.ai.richhealth.shared" — must match the keychain-access-groups
+    /// entitlement on the iOS app, the Watch app, AND the widget extension.
     static let accessGroup = "REPLACE_TEAMID.ai.richhealth.shared"
-
-    /// DEBUG-only manual token for instant testing. Paste your JWT here, run, done.
     static let debugToken = ""
 
     private static let service = "ai.richhealth.auth"
@@ -124,8 +115,14 @@ struct WatchAPIClient {
         switch http.statusCode {
         case 200...299: return data
         case 401: throw APIError.unauthorized
-        case 429: throw APIError.limitReached(Self.message(from: data))
-        default: throw APIError.server(http.statusCode, Self.message(from: data))
+        case 429, 402: throw APIError.limitReached(Self.message(from: data))
+        default:
+            // Some backend limits reply 400 with a "limit" message — surface those as limitReached.
+            let msg = Self.message(from: data)
+            if http.statusCode == 400, let m = msg, m.lowercased().contains("limit") {
+                throw APIError.limitReached(m)
+            }
+            throw APIError.server(http.statusCode, msg)
         }
     }
 
@@ -135,10 +132,21 @@ struct WatchAPIClient {
     }
 }
 
-// MARK: - Models (match backend response shapes)
+// MARK: - ISO date helper
 
-/// One reading from GET /api/observations → `{ observations: [...] }` (backend Observation model).
-/// Named `HealthObservation` to avoid clashing with the `Observation` framework module.
+extension ISO8601DateFormatter {
+    static let withFractionalSeconds: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    static func parse(_ s: String) -> Date? {
+        ISO8601DateFormatter().date(from: s) ?? withFractionalSeconds.date(from: s)
+    }
+}
+
+// MARK: - Observations (Apple Health vitals synced by the iPhone app)
+
 struct HealthObservation: Decodable {
     let type: String
     let value: Double
@@ -154,10 +162,8 @@ struct HealthObservation: Decodable {
         value = try c.decode(Double.self, forKey: .value)
         unit = try? c.decode(String.self, forKey: .unit)
         sourceName = try? c.decode(String.self, forKey: .sourceName)
-        // Backend sends ISO-8601 strings; decode leniently.
         if let s = try? c.decode(String.self, forKey: .effectiveDateTime) {
-            effectiveDateTime = ISO8601DateFormatter().date(from: s)
-                ?? ISO8601DateFormatter.withFractionalSeconds.date(from: s)
+            effectiveDateTime = ISO8601DateFormatter.parse(s)
         } else {
             effectiveDateTime = nil
         }
@@ -166,57 +172,101 @@ struct HealthObservation: Decodable {
 
 struct ObservationsResponse: Decodable { let observations: [HealthObservation] }
 
-/// POST /api/insights/nutri-check → `{ recommendation, reason, ... }`.
+struct HealthService {
+    private let api = WatchAPIClient()
+
+    private func fetch(_ type: String, days: Int, limit: Int) async throws -> [HealthObservation] {
+        try await api.send(
+            Endpoint(path: "/api/observations",
+                     query: [.init(name: "type", value: type),
+                             .init(name: "days", value: "\(days)"),
+                             .init(name: "limit", value: "\(limit)")]),
+            as: ObservationsResponse.self).observations   // backend sorts newest-first
+    }
+
+    /// Most-recent reading of a type in the last `days` (nil = no data, not an error).
+    func latest(_ type: String, days: Int = 2) async throws -> HealthObservation? {
+        try await fetch(type, days: days, limit: 200).first
+    }
+
+    /// Sum of a cumulative type (steps, active energy) over the last `days`.
+    func total(_ type: String, days: Int = 1) async throws -> (sum: Double, asOf: Date?, source: String?)? {
+        let items = try await fetch(type, days: days, limit: 1000)
+        guard !items.isEmpty else { return nil }
+        return (items.reduce(0) { $0 + $1.value }, items.first?.effectiveDateTime, items.first?.sourceName)
+    }
+}
+
+// MARK: - Daily briefing (AI, app-open hook)
+
+struct BriefingCard: Decodable, Identifiable {
+    let priority: String?
+    let title: String
+    let points: [String]
+    var id: String { title }
+}
+struct BriefingResponse: Decodable {
+    let cards: [BriefingCard]
+    let generatedAt: String?
+    let source: String?
+}
+
+struct BriefingService {
+    private let api = WatchAPIClient()
+    func fetch() async throws -> BriefingResponse {
+        try await api.send(Endpoint(path: "/api/insights/briefing"), as: BriefingResponse.self)
+    }
+}
+
+// MARK: - NutriCheck
+
 struct NutriCheckResponse: Decodable {
     let recommendation: String?   // strong_yes | yes | moderate | no | strong_no
     let reason: String?
 }
-
-extension ISO8601DateFormatter {
-    static let withFractionalSeconds: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-}
-
-// MARK: - Services
-
-struct HealthService {
-    private let api = WatchAPIClient()
-
-    /// Latest reading of a type in the last `days`.
-    func latest(_ type: String, days: Int = 1) async throws -> HealthObservation? {
-        let res = try await api.send(
-            Endpoint(path: "/api/observations",
-                     query: [.init(name: "type", value: type),
-                             .init(name: "days", value: "\(days)"),
-                             .init(name: "limit", value: "200")]),
-            as: ObservationsResponse.self)
-        return res.observations.first   // backend sorts newest-first
-    }
-
-    /// Sum of a type's values over the last `days` (for cumulative metrics like steps/energy).
-    func total(_ type: String, days: Int = 1) async throws -> (sum: Double, asOf: Date?, source: String?) {
-        let res = try await api.send(
-            Endpoint(path: "/api/observations",
-                     query: [.init(name: "type", value: type),
-                             .init(name: "days", value: "\(days)"),
-                             .init(name: "limit", value: "1000")]),
-            as: ObservationsResponse.self)
-        let sum = res.observations.reduce(0) { $0 + $1.value }
-        return (sum, res.observations.first?.effectiveDateTime, res.observations.first?.sourceName)
-    }
-}
-
 struct NutriCheckService {
     private let api = WatchAPIClient()
-
     func check(_ foodItem: String) async throws -> NutriCheckResponse {
         struct Req: Encodable { let foodItem: String; let previousChecks: [String] }
         let body = try JSONEncoder().encode(Req(foodItem: foodItem, previousChecks: []))
         return try await api.send(
             Endpoint(path: "/api/insights/nutri-check", method: .post, body: body),
             as: NutriCheckResponse.self)
+    }
+}
+
+// MARK: - Ask AI (Richie chat) — minimal one-shot shape
+
+struct ChatSessionDTO: Decodable {
+    let sessionId: String
+    let title: String?
+}
+struct ChatMessageDTO: Decodable {
+    let message: String
+    let isFromAI: Bool?
+}
+struct SendMessageResponse: Decodable {
+    let aiMessage: ChatMessageDTO
+    let isLimitReached: Bool?
+}
+
+struct ChatService {
+    private let api = WatchAPIClient()
+
+    func createSession(title: String = "Watch") async throws -> String {
+        struct Req: Encodable { let title: String; let dependentId: String? }
+        let body = try JSONEncoder().encode(Req(title: title, dependentId: nil))
+        return try await api.send(
+            Endpoint(path: "/api/chat/sessions", method: .post, body: body),
+            as: ChatSessionDTO.self).sessionId
+    }
+
+    func ask(_ text: String, sessionId: String) async throws -> String {
+        struct Req: Encodable { let message: String; let modelType: String? }
+        let body = try JSONEncoder().encode(Req(message: text, modelType: nil))
+        let res = try await api.send(
+            Endpoint(path: "/api/chat/sessions/\(sessionId)/messages", method: .post, body: body),
+            as: SendMessageResponse.self)
+        return res.aiMessage.message
     }
 }

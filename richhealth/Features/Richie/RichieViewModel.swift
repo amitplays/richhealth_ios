@@ -263,6 +263,21 @@ final class RichieViewModel {
         isLoadingHistory = false
     }
 
+    /// Pick who the chat is for. The dependent is bound when the session is created,
+    /// so switching while a session is already live starts a fresh chat for that
+    /// person (mirrors Android, where the profile chip stays available mid-chat).
+    func selectDependent(_ dep: DependentEntry?) {
+        let changed = dep?.id != selectedDependent?.id
+        selectedDependent = dep
+        guard changed, currentSession != nil else { return }
+        currentSession = nil
+        messages = []
+        cardVMs = [:]
+        limitKind = monthlyChatLimitReached ? .monthlySessionLimit : nil
+        errorMessage = nil
+        input = ""
+    }
+
     func startNewChat() {
         currentSession = nil
         messages = []

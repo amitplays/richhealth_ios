@@ -346,25 +346,22 @@ struct RichieView: View {
                 .disabled(blocked)
 
                 // Family member selector — mirrors Android inputProfileChip.
-                // Locked after first message (dependentId is set at session creation).
                 if !vm.dependents.isEmpty {
-                    let locked = vm.currentSession != nil || blocked
+                    // Always tappable, mirroring Android where the profile chip stays
+                    // available mid-chat. Switching who the chat is for starts a fresh chat.
                     Button { vm.showDependentPicker = true } label: {
                         HStack(spacing: 3) {
-                            Image(systemName: locked ? "lock.fill" : "person.fill")
+                            Image(systemName: "person.fill")
                                 .font(.system(size: 10, weight: .semibold))
                             Text(vm.selectedDependent?.name ?? "Me")
                                 .font(.system(size: 11, weight: .bold))
-                            if !locked {
-                                Image(systemName: "chevron.down").font(.system(size: 9))
-                            }
+                            Image(systemName: "chevron.down").font(.system(size: 9))
                         }
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8).padding(.vertical, 4)
                         .glassEffect(.regular.interactive(), in: .capsule)
                     }
                     .buttonStyle(.plain)
-                    .disabled(locked)
                 }
 
                 Spacer()
@@ -809,7 +806,7 @@ private struct DependentPickerSheet: View {
                 Section {
                     // "Me" — always the first option
                     Button {
-                        vm.selectedDependent = nil
+                        vm.selectDependent(nil)
                         dismiss()
                     } label: {
                         HStack {
@@ -822,12 +819,13 @@ private struct DependentPickerSheet: View {
                                     .foregroundStyle(Theme.brandTeal)
                             }
                         }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
                     ForEach(vm.dependents) { dep in
                         Button {
-                            vm.selectedDependent = dep
+                            vm.selectDependent(dep)
                             dismiss()
                         } label: {
                             HStack {
@@ -840,11 +838,12 @@ private struct DependentPickerSheet: View {
                                         .foregroundStyle(Theme.brandTeal)
                                 }
                             }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 } footer: {
-                    Text("Chat on behalf of a family member. The selection is locked after the first message in a session.")
+                    Text("Chat on behalf of a family member. Switching starts a new chat for that person.")
                 }
             }
             .navigationTitle("Chat for")

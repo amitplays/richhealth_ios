@@ -7,6 +7,8 @@ struct ProfileView: View {
     @State private var vm = ProfileViewModel()
     @State private var selectedTab = 0
     @State private var showLogoutConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var deleteError: String?
     @State private var showCustomInstructionsEditor = false
     @State private var showLegal = false
     @State private var showRequests = false
@@ -99,6 +101,11 @@ struct ProfileView: View {
                         } label: {
                             Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
                         }
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("Delete Account", systemImage: "trash")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             // Red dot when there are pending requests, so they're discoverable.
@@ -118,6 +125,25 @@ struct ProfileView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("You'll need to sign in again to access your health data.")
+            }
+            .confirmationDialog("Delete account?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                Button("Delete Account", role: .destructive) {
+                    Task {
+                        do { try await appEnv.auth.deleteAccount() }
+                        catch { deleteError = error.localizedDescription }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your account and all your health data. This can't be undone.")
+            }
+            .alert("Couldn't Delete Account", isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteError ?? "")
             }
             .sheet(isPresented: $showRequests) {
                 FamilyRequestsSheet(onChanged: { Task { await vm.loadPendingRequests() } })
@@ -460,9 +486,9 @@ struct ProfileView: View {
                 Toggle("", isOn: $vm.notificationsEnabled).labelsHidden().tint(Theme.brandTeal)
             }
             .onChange(of: vm.notificationsEnabled) { _, enabled in
+                // Use the plan already loaded by vm.load — NO network call from a local toggle.
+                let tier = vm.proAccess?.tier ?? "free"
                 Task {
-                    // Tier drives the check-in cadence (mirrors Android). Best-effort; default free.
-                    let tier = (try? await appEnv.auth.fetchProAccess())?.tier ?? "free"
                     let ok = await LocalNotificationManager.shared.setEnabled(enabled, tier: tier)
                     // Turned on but denied at the OS level → revert the toggle.
                     if enabled && !ok { vm.notificationsEnabled = false }
@@ -498,7 +524,7 @@ struct ProfileView: View {
                 Spacer()
                 Toggle("", isOn: $vm.biometricEnabled).labelsHidden().tint(Theme.brandTeal)
             }
-            .disabled(!appEnv.biometric.canUseBiometrics)
+            .disabled(!appEnv.biometric.canDeviceAuthenticate)
             .onChange(of: vm.biometricEnabled) { _, enabled in
                 guard enabled else { return }
                 Task {
@@ -1155,7 +1181,7 @@ private struct ChangePasswordSheet: View {
     @State private var isSaving = false
 
     private var canSave: Bool {
-        !currentPassword.isEmpty && newPassword.count >= 6 && newPassword == confirmPassword
+        !currentPassword.isEmpty && newPassword.count >= 8 && newPassword == confirmPassword
     }
 
     var body: some View {
@@ -1164,7 +1190,7 @@ private struct ChangePasswordSheet: View {
                 Section {
                     SecureField("Current password", text: $currentPassword)
                         .textContentType(.password)
-                    SecureField("New password (min. 6 characters)", text: $newPassword)
+                    SecureField("New password (min. 8 characters)", text: $newPassword)
                         .textContentType(.newPassword)
                     SecureField("Confirm new password", text: $confirmPassword)
                         .textContentType(.newPassword)
@@ -1197,8 +1223,17 @@ private struct ChangePasswordSheet: View {
             errorMessage = "Passwords do not match."
             return
         }
-        // TODO: confirm change-password endpoint in ../richhealthbackend/routes before implementing
-        errorMessage = "Password change is not yet available in this version."
+        errorMessage = nil
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await auth.changePassword(current: currentPassword, new: newPassword)
+            dismiss()
+        } catch let err as APIError {
+            errorMessage = err.userMessage
+        } catch {
+            errorMessage = "Couldn't change password. Please try again."
+        }
     }
 }
 

@@ -46,12 +46,22 @@ final class LocalNotificationManager: NSObject, UNUserNotificationCenterDelegate
     /// Returns the effective state — false if the user denied permission at the OS level.
     @discardableResult
     func setEnabled(_ enabled: Bool, tier: String) async -> Bool {
-        guard enabled else { cancelAll(); return false }
-        guard await requestAuthorizationIfNeeded() else { return false }
+        guard enabled else {
+            cancelAll()
+            print("[LocalNotif] disabled → cancelled all pending")
+            return false
+        }
+        guard await requestAuthorizationIfNeeded() else {
+            print("[LocalNotif] enable requested but OS permission not granted")
+            return false
+        }
         cancelAll()
         scheduleDailyBrief()
         scheduleCheckIns(tier: tier)
         fireConfirmation()
+        center.getPendingNotificationRequests { reqs in
+            print("[LocalNotif] enabled (tier=\(tier)) → \(reqs.count) scheduled: \(reqs.map(\.identifier).joined(separator: ", "))")
+        }
         return true
     }
 

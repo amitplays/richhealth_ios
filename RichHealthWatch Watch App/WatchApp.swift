@@ -9,38 +9,58 @@ struct RichHealthWatchApp: App {
     }
 }
 
-// MARK: - Root — vertical paging (the modern watchOS pattern): one "moment" per page
+// MARK: - Root — vertical paging, one "moment" per page
 
 struct RootView: View {
     var body: some View {
         TabView {
             TodayGlanceView()
+            BriefingView()
+            AskAIView()
             NutriCheckVoiceView()
         }
         .tabViewStyle(.verticalPage)
     }
 }
 
-// MARK: - Small shared bits
+// MARK: - Shared bits
 
-/// The RichHealth logo, reused from the shared asset (add `AppLogo` to the watch asset catalog).
-private struct BrandHeader: View {
-    let title: String
+private let pageBackground = WatchTheme.brandTeal.opacity(0.18).gradient
+
+private struct LoadingBlock: View {
     var body: some View {
-        HStack(spacing: WatchTheme.Spacing.s) {
-            Image("AppLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.primary)
-            Spacer()
-        }
+        BrandSpinner(size: 34)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, WatchTheme.Spacing.l)
     }
 }
 
-// MARK: - Page 1 — Today glance
+private struct MessageCard: View {
+    let text: String
+    var body: some View {
+        RHGlassCard { Text(text).font(.footnote).foregroundStyle(.secondary) }
+    }
+}
+
+private struct PrimaryButton: View {
+    let title: String
+    let systemImage: String?
+    let action: () -> Void
+    var disabled: Bool = false
+    var body: some View {
+        Button(action: action) {
+            if let systemImage {
+                Label(title, systemImage: systemImage).frame(maxWidth: .infinity)
+            } else {
+                Text(title).frame(maxWidth: .infinity)
+            }
+        }
+        .tint(WatchTheme.brandTeal)
+        .disabled(disabled)
+    }
+}
+
+// MARK: - Page 1 — Today glance (richer vitals)
 
 struct TodayGlanceView: View {
     @State private var model = TodayGlanceModel()
@@ -48,25 +68,27 @@ struct TodayGlanceView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: WatchTheme.Spacing.m) {
-                BrandHeader(title: "Today")
+                BrandHeader(title: "Today", busy: model.isLoading)
 
                 if model.isLoading && model.metrics.isEmpty {
-                    ProgressView().tint(WatchTheme.brandTeal)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, WatchTheme.Spacing.l)
-                } else if let err = model.errorText {
-                    RHGlassCard { Text(err).font(.footnote).foregroundStyle(.secondary) }
+                    LoadingBlock()
+                } else if let err = model.errorText, model.metrics.isEmpty {
+                    MessageCard(text: err)
                 } else {
-                    ForEach(model.metrics) { m in
-                        RHGlassCard {
-                            VStack(alignment: .leading, spacing: WatchTheme.Spacing.xs) {
-                                Text(m.label.uppercased())
-                                    .font(.caption2).foregroundStyle(.secondary)
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    Text(m.value)
-                                        .font(.system(.title2, design: .rounded).weight(.semibold))
-                                        .foregroundStyle(WatchTheme.brandTeal)
-                                    Text(m.unit).font(.caption2).foregroundStyle(.secondary)
+                    RHGlassGroup {
+                        ForEach(model.metrics) { m in
+                            RHGlassCard {
+                                VStack(alignment: .leading, spacing: WatchTheme.Spacing.xs) {
+                                    Text(m.label.uppercased())
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                        Text(m.value)
+                                            .font(.system(.title2, design: .rounded).weight(.semibold))
+                                            .foregroundStyle(WatchTheme.brandTeal)
+                                        if !m.unit.isEmpty {
+                                            Text(m.unit).font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -80,13 +102,109 @@ struct TodayGlanceView: View {
             }
             .padding(.horizontal, WatchTheme.Spacing.s)
         }
-        .containerBackground(WatchTheme.brandTeal.opacity(0.18).gradient, for: .tabView)
+        .containerBackground(pageBackground, for: .tabView)
         .task { await model.load() }
         .refreshable { await model.load() }
     }
 }
 
-// MARK: - Page 2 — NutriCheck voice
+// MARK: - Page 2 — Daily AI briefing
+
+struct BriefingView: View {
+    @State private var model = BriefingModel()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: WatchTheme.Spacing.m) {
+                BrandHeader(title: "Briefing", busy: model.isLoading)
+
+                if model.isLoading && model.cards.isEmpty {
+                    LoadingBlock()
+                } else if let err = model.errorText, model.cards.isEmpty {
+                    MessageCard(text: err)
+                } else {
+                    RHGlassGroup {
+                        ForEach(model.cards) { card in
+                            RHGlassCard {
+                                VStack(alignment: .leading, spacing: WatchTheme.Spacing.xs) {
+                                    Text(card.title)
+                                        .font(.headline).foregroundStyle(WatchTheme.brandTeal)
+                                    ForEach(Array(card.points.enumerated()), id: \.offset) { _, p in
+                                        Text("• " + p).font(.footnote).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    PrimaryButton(title: "Read aloud", systemImage: "speaker.wave.2.fill") {
+                        model.speakAll()
+                    }
+                }
+            }
+            .padding(.horizontal, WatchTheme.Spacing.s)
+        }
+        .containerBackground(pageBackground, for: .tabView)
+        .task { await model.load() }
+        .refreshable { await model.load() }
+    }
+}
+
+// MARK: - Page 3 — Ask AI (voice)
+
+struct AskAIView: View {
+    @State private var model = AskAIModel()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: WatchTheme.Spacing.m) {
+                BrandHeader(title: "Ask RichHealth", busy: model.phase == .thinking)
+
+                switch model.phase {
+                case .idle:
+                    ask
+                case .thinking:
+                    RHGlassCard {
+                        HStack(spacing: WatchTheme.Spacing.s) {
+                            BrandSpinner(size: 22)
+                            Text("Thinking…").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                case .answered:
+                    RHGlassCard {
+                        Text(model.answer).font(.footnote).foregroundStyle(.primary)
+                    }
+                    againButton
+                case .error:
+                    MessageCard(text: model.errorText)
+                    againButton
+                }
+            }
+            .padding(.horizontal, WatchTheme.Spacing.s)
+        }
+        .containerBackground(pageBackground, for: .tabView)
+    }
+
+    private var ask: some View {
+        VStack(alignment: .leading, spacing: WatchTheme.Spacing.s) {
+            RHGlassCard {
+                HStack(spacing: WatchTheme.Spacing.s) {
+                    Image(systemName: "mic.fill").foregroundStyle(WatchTheme.brandTeal)
+                    TextField("Tap & ask a question", text: $model.question)
+                        .font(.footnote)
+                        .onSubmit { Task { await model.submit() } }
+                }
+            }
+            PrimaryButton(title: "Ask", systemImage: nil, action: { Task { await model.submit() } },
+                          disabled: model.question.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    private var againButton: some View {
+        PrimaryButton(title: "Ask another", systemImage: "arrow.counterclockwise") { model.reset() }
+    }
+}
+
+// MARK: - Page 4 — NutriCheck (voice)
 
 struct NutriCheckVoiceView: View {
     @State private var model = NutriCheckModel()
@@ -94,7 +212,7 @@ struct NutriCheckVoiceView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: WatchTheme.Spacing.m) {
-                BrandHeader(title: "NutriCheck")
+                BrandHeader(title: "NutriCheck", busy: model.phase == .thinking)
 
                 switch model.phase {
                 case .idle:
@@ -102,24 +220,22 @@ struct NutriCheckVoiceView: View {
                 case .thinking:
                     RHGlassCard {
                         HStack(spacing: WatchTheme.Spacing.s) {
-                            ProgressView().tint(WatchTheme.brandTeal)
-                            Text("Checking \(model.foodItem)…")
-                                .font(.footnote).foregroundStyle(.secondary)
+                            BrandSpinner(size: 22)
+                            Text("Checking \(model.foodItem)…").font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                 case .result:
                     resultCard
                 case .error:
-                    RHGlassCard { Text(model.errorText).font(.footnote).foregroundStyle(.secondary) }
+                    MessageCard(text: model.errorText)
                     againButton
                 }
             }
             .padding(.horizontal, WatchTheme.Spacing.s)
         }
-        .containerBackground(WatchTheme.brandTeal.opacity(0.18).gradient, for: .tabView)
+        .containerBackground(pageBackground, for: .tabView)
     }
 
-    // Tap the field → the watch input UI opens with Dictation; speak the food, then submit.
     private var prompt: some View {
         VStack(alignment: .leading, spacing: WatchTheme.Spacing.s) {
             RHGlassCard {
@@ -130,13 +246,8 @@ struct NutriCheckVoiceView: View {
                         .onSubmit { Task { await model.submit() } }
                 }
             }
-            Button {
-                Task { await model.submit() }
-            } label: {
-                Text("Check").frame(maxWidth: .infinity)
-            }
-            .tint(WatchTheme.brandTeal)
-            .disabled(model.foodItem.trimmingCharacters(in: .whitespaces).isEmpty)
+            PrimaryButton(title: "Check", systemImage: nil, action: { Task { await model.submit() } },
+                          disabled: model.foodItem.trimmingCharacters(in: .whitespaces).isEmpty)
         }
     }
 
@@ -144,8 +255,7 @@ struct NutriCheckVoiceView: View {
         VStack(alignment: .leading, spacing: WatchTheme.Spacing.s) {
             RHGlassCard {
                 VStack(alignment: .leading, spacing: WatchTheme.Spacing.xs) {
-                    Text(model.foodItem)
-                        .font(.caption2).foregroundStyle(.secondary)
+                    Text(model.foodItem).font(.caption2).foregroundStyle(.secondary)
                     Text(model.verdictLabel)
                         .font(.system(.title3, design: .rounded).weight(.semibold))
                         .foregroundStyle(model.isPositive ? WatchTheme.brandTeal : .primary)
@@ -159,10 +269,6 @@ struct NutriCheckVoiceView: View {
     }
 
     private var againButton: some View {
-        Button { model.reset() } label: {
-            Label("Check another", systemImage: "arrow.counterclockwise")
-                .frame(maxWidth: .infinity)
-        }
-        .tint(WatchTheme.brandTeal)
+        PrimaryButton(title: "Check another", systemImage: "arrow.counterclockwise") { model.reset() }
     }
 }

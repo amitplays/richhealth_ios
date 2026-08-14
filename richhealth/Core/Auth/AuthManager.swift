@@ -103,6 +103,16 @@ import Observation
         HealthKitManager.shared.clearSyncState()   // don't carry Apple-sync dedup ledger across accounts
     }
 
+    /// DELETE /api/user — Apple-required account deletion (App Store Review 5.1.1(v)).
+    /// Erases the account + all associated data server-side, then clears the local session
+    /// exactly like logout(). Throws on failure so the UI can keep the user signed in and show an error.
+    func deleteAccount() async throws {
+        try await api.send(
+            Endpoint(path: "/api/user", method: .delete, showsLoader: false, loaderMessage: "Deleting your account…")
+        )
+        logout()
+    }
+
     /// Force-reload the profile. showsLoader:true only for the Profile tab's own load — post-edit
     /// and post-purchase refreshes stay silent (they happen behind a sheet / after their own UI).
     func refreshProfile(showsLoader: Bool = false) async { await loadProfile(showsLoader: showsLoader) }
@@ -120,6 +130,39 @@ import Observation
 
     /// GET /api/user/pro-access — always from server, never local logic (CLAUDE.md §7).
     /// showsLoader:false — runs on the Profile tab, which shows its own skeletons.
+    /// POST /api/auth/forgot-password — emails a reset code (no auth).
+    func forgotPassword(email: String) async throws {
+        struct Body: Encodable { let email: String }
+        struct Ack: Decodable { let message: String? }
+        let body = try JSONEncoder().encode(Body(email: email))
+        _ = try await api.send(
+            Endpoint(path: "/api/auth/forgot-password", method: .post, body: body, requiresAuth: false, showsLoader: false, loaderMessage: "Sending reset code…"),
+            as: Ack.self
+        )
+    }
+
+    /// POST /api/auth/reset-password — verifies the code and sets a new password (no auth).
+    func resetPassword(email: String, otp: String, newPassword: String) async throws {
+        struct Body: Encodable { let email: String; let otp: String; let newPassword: String }
+        struct Ack: Decodable { let success: Bool?; let message: String? }
+        let body = try JSONEncoder().encode(Body(email: email, otp: otp, newPassword: newPassword))
+        _ = try await api.send(
+            Endpoint(path: "/api/auth/reset-password", method: .post, body: body, requiresAuth: false, showsLoader: false, loaderMessage: "Resetting password…"),
+            as: Ack.self
+        )
+    }
+
+    /// POST /api/auth/change-password — verifies the current password server-side.
+    func changePassword(current: String, new: String) async throws {
+        struct Body: Encodable { let currentPassword: String; let newPassword: String }
+        struct Ack: Decodable { let success: Bool?; let message: String? }
+        let body = try JSONEncoder().encode(Body(currentPassword: current, newPassword: new))
+        _ = try await api.send(
+            Endpoint(path: "/api/auth/change-password", method: .post, body: body, showsLoader: false, loaderMessage: "Updating password…"),
+            as: Ack.self
+        )
+    }
+
     func fetchProAccess() async throws -> ProAccess {
         return try await api.send(Endpoint(path: "/api/user/pro-access", showsLoader: false, loaderMessage: "Checking your plan…"), as: ProAccess.self)
     }
